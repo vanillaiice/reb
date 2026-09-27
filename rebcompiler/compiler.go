@@ -1,0 +1,347 @@
+// SPDX-License-Identifier: BUSL-1.1 OR GPL-3.0-or-later
+// Copyright (C) 2026 hblabs
+//
+// Dual-licensed: BUSL-1.1 as part of the rebar server (/server/LICENSE.txt) and
+// GPL-3.0-or-later as part of Rebar Studio (/rebar-studio/LICENSE), which
+// compiles this package to WebAssembly.
+
+package rebcompiler
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"regexp"
+	"strings"
+
+	"golang.org/x/net/html"
+	"golang.org/x/net/html/atom"
+)
+
+var (
+	// selfClosingRebTag matches a self-closing custom tag such as
+	// <reb-text name="a" label="A" />. Attribute values may contain ">" or "/"
+	// because quoted values are matched as a whole.
+	selfClosingRebTag = regexp.MustCompile(`(?i)<(reb-[a-z0-9-]+)((?:\s+[^\s"'<>/=]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'<>]+))?)*)\s*/>`)
+
+	// rebRowOpen matches <reb-row> with or without attributes.
+	rebRowOpen  = regexp.MustCompile(`(?i)<reb-row(\s[^>]*)?>`)
+	rebRowClose = regexp.MustCompile(`(?i)</reb-row\s*>`)
+
+	htmlComment = regexp.MustCompile(`(?s)<!--.*?-->`)
+
+	// fieldName is what a Go template can address as {{.name}}.
+	fieldName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+)
+
+// RebFieldSchema represents the JSON schema structure expected by the frontend.
+type RebFieldSchema struct {
+	Key     string   `json:"key"`
+	Type    string   `json:"type"`
+	Label   string   `json:"label"`
+	Options []string `json:"options,omitempty"`
+}
+
+// Compile takes raw HTML with custom <reb-*> tags, extracts the field schema,
+// and replaces the custom tags with native go html/template bindings.
+func Compile(rawHTML string) (json.RawMessage, string, error) {
+	// Strip HTML comments entirely
+	rawHTML = htmlComment.ReplaceAllString(rawHTML, "")
+
+	// HTML5 ignores "/>" on non-void elements, so a self-closing <reb-text ... />
+	// would stay open and swallow its following siblings (which were then
+	// dropped from both the schema and the output). Expand them to explicit
+	// open/close pairs before parsing.
+	rawHTML = selfClosingRebTag.ReplaceAllString(rawHTML, "<$1$2></$1>")
+
+	// Pre-process raw HTML to convert <reb-row> to <tr reb-row> before the HTML5 parser hoists invalid tags out of tables
+	rawHTML = rebRowOpen.ReplaceAllString(rawHTML, "<tr reb-row$1>")
+	rawHTML = rebRowClose.ReplaceAllString(rawHTML, "</tr>")
+
+	node, err := html.Parse(strings.NewReader(rawHTML))
+	if err != nil {
+		return nil, "", err
+	}
+
+	var schema []RebFieldSchema
+	var walkErr error
+
+	getAttr := func(n *html.Node, key string) string {
+		for _, attr := range n.Attr {
+			if attr.Key == key {
+				return attr.Val
+			}
+		}
+		return ""
+	}
+
+	var walk func(*html.Node, string)
+	walk = func(n *html.Node, currentTable string) {
+		// Check for reb-row attribute (avoids HTML5 parser hoisting invalid tags out of tables)
+		if n.Type == html.ElementNode {
+			hasRebRow := false
+			for i, attr := range n.Attr {
+				if attr.Key == "reb-row" {
+					hasRebRow = true
+					// Strip the attribute
+					n.Attr = append(n.Attr[:i], n.Attr[i+1:]...)
+					break
+				}
+			}
+
+			if hasRebRow && currentTable != "" {
+				// Inject Go template range around this node
+				rangeNode := &html.Node{Type: html.TextNode, Data: `{{range .` + currentTable + `}}`}
+				n.Parent.InsertBefore(rangeNode, n)
+
+				endNode := &html.Node{Type: html.TextNode, Data: `{{end}}`}
+				if n.NextSibling != nil {
+					n.Parent.InsertBefore(endNode, n.NextSibling)
+				} else {
+					n.Parent.AppendChild(endNode)
+				}
+			}
+		}
+
+		// Check for <reb-*> tags
+		if n.Type == html.ElementNode && strings.HasPrefix(n.Data, "reb-") {
+			rebType := strings.TrimPrefix(n.Data, "reb-")
+			name := getAttr(n, "name")
+			label := getAttr(n, "label")
+
+			// The name becomes a Go template field ({{.name}}), so anything else
+			// (e.g. "site-name") would compile here and only fail at render time.
+			if name != "" && !fieldName.MatchString(name) && walkErr == nil {
+				walkErr = fmt.Errorf("invalid field name %q on <%s>: use letters, digits and underscores, starting with a letter or underscore", name, n.Data)
+			}
+
+			if name != "" {
+				schemaType := rebType
+				if rebType == "declare" {
+					if t := getAttr(n, "type"); t != "" {
+						schemaType = t
+					} else {
+						schemaType = "text" // Default to text
+					}
+				}
+
+				field := RebFieldSchema{
+					Key:   name,
+					Type:  schemaType,
+					Label: label,
+				}
+
+				if opts := getAttr(n, "options"); opts != "" {
+					// options="High, Medium, Low" must yield "Medium", not " Medium".
+					for _, opt := range strings.Split(opts, ",") {
+						if opt = strings.TrimSpace(opt); opt != "" {
+							field.Options = append(field.Options, opt)
+						}
+					}
+				}
+
+				// Deduplicate: only append if a field with this Key doesn't already exist
+				exists := false
+				for _, existingField := range schema {
+					if existingField.Key == name {
+						exists = true
+						break
+					}
+				}
+				if !exists {
+					schema = append(schema, field)
+				}
+			}
+
+			// If it's just a declare, we completely remove its visual presence
+			// by turning it into an empty text node to avoid breaking tree traversal
+			if rebType == "declare" {
+				n.Type = html.TextNode
+				n.Data = ""
+				n.Attr = nil
+				n.FirstChild = nil
+				n.LastChild = nil
+				// Skip the rest of the node processing
+				goto WalkChildren
+			}
+
+			// If it's a tailwind directive, convert it to the local script tag
+			if rebType == "tailwind" {
+				n.Type = html.ElementNode
+				n.Data = "script"
+				n.Attr = []html.Attribute{{Key: "src", Val: "tailwindcss.js"}}
+				n.FirstChild = nil
+				n.LastChild = nil
+				goto WalkChildren
+			}
+
+			// If it's a page break, inject standard CSS print breaking styles
+			if rebType == "pagebreak" {
+				n.Type = html.ElementNode
+				n.Data = "div"
+				n.Attr = []html.Attribute{{Key: "style", Val: "page-break-after: always; clear: both;"}}
+				n.FirstChild = nil
+				n.LastChild = nil
+				goto WalkChildren
+			}
+
+			// If it's a footer block, hide it. The PDF client will rip it out later.
+			if rebType == "footer" {
+				n.Type = html.ElementNode
+				n.Data = "rebar-pdf-footer-extract"
+				var newAttrs []html.Attribute
+				newAttrs = append(newAttrs, html.Attribute{Key: "style", Val: "display:none;"})
+				if c := getAttr(n, "class"); c != "" {
+					newAttrs = append(newAttrs, html.Attribute{Key: "class", Val: c})
+				}
+				n.Attr = newAttrs
+				goto WalkChildren // Keep its children intact!
+			}
+
+			if rebType == "table" {
+				// We turn the <reb-table> container into a div and keep all children
+				// (the manual table layout) intact so the user can structure it themselves.
+				n.Type = html.ElementNode
+				n.Data = "div"
+
+				var newAttrs []html.Attribute
+				if c := getAttr(n, "class"); c != "" {
+					newAttrs = append(newAttrs, html.Attribute{Key: "class", Val: c})
+				}
+				n.Attr = newAttrs
+				currentTable = name // Update context for children
+				goto WalkChildren
+			}
+
+			class := getAttr(n, "class")
+
+			// Transform node in-place
+			n.Data = "span"
+			switch rebType {
+			case "photogrid", "attachments", "textarea":
+				n.Data = "div"
+			case "signature":
+				n.Data = "img"
+			}
+
+			n.Attr = nil
+			if class != "" {
+				n.Attr = append(n.Attr, html.Attribute{Key: "class", Val: class})
+			}
+			// Textarea content from Quill comes as HTML (e.g. <p>...</p>). Inside table cells,
+			// the text won't wrap without explicit word-wrap styles, causing PDF text to overflow.
+			if rebType == "textarea" {
+				n.Attr = append(n.Attr, html.Attribute{Key: "style", Val: "word-wrap:break-word;overflow-wrap:break-word;white-space:normal;"})
+			}
+			n.FirstChild = nil
+			n.LastChild = nil
+
+			// Construct dynamic content based on the rebType
+			if rebType == "photogrid" || rebType == "attachments" {
+				n.AppendChild(&html.Node{Type: html.TextNode, Data: `{{range .` + name + `}}`})
+				img := &html.Node{
+					Type: html.ElementNode,
+					Data: "img",
+					Attr: []html.Attribute{
+						{Key: "src", Val: `{{.}}`},
+						{Key: "class", Val: "w-full object-cover rounded shadow-sm"},
+					},
+				}
+				n.AppendChild(img)
+				n.AppendChild(&html.Node{Type: html.TextNode, Data: `{{end}}`})
+			} else if rebType == "signature" {
+				// Base signature styles
+				sigClass := "h-16 object-contain"
+				if class != "" {
+					sigClass = class
+				}
+
+				// Ensure src uses Go template
+				n.Attr = []html.Attribute{
+					{Key: "src", Val: `{{.` + name + `}}`},
+					{Key: "class", Val: sigClass},
+				}
+			} else if name != "" {
+				// Generic text/number/date
+				if rebType == "textarea" {
+					n.AppendChild(&html.Node{Type: html.TextNode, Data: `{{.` + name + ` | safeHTML}}`})
+				} else {
+					n.AppendChild(&html.Node{Type: html.TextNode, Data: `{{.` + name + `}}`})
+				}
+			}
+		}
+
+	WalkChildren:
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c, currentTable)
+		}
+	}
+
+	walk(node, "")
+	if walkErr != nil {
+		return nil, "", walkErr
+	}
+
+	var buf bytes.Buffer
+	if strings.Contains(strings.ToLower(rawHTML), "<body") {
+		if err := html.Render(&buf, node); err != nil {
+			return nil, "", err
+		}
+	} else {
+		// html.Parse wraps snippets in <html><head></head><body> ... </body>. The
+		// user didn't write a <body>, so emit the snippet without the wrapper. A
+		// leading <style>, <link> or <meta> is moved into <head> by the parser, so
+		// render the head's children before the body's instead of dropping them.
+		for _, section := range []atom.Atom{atom.Head, atom.Body} {
+			if el := findElement(node, section); el != nil {
+				for c := el.FirstChild; c != nil; c = c.NextSibling {
+					if err := html.Render(&buf, c); err != nil {
+						return nil, "", err
+					}
+				}
+			}
+		}
+	}
+
+	outHTML := buf.String()
+
+	// Fix html.Parse mangling of Go template syntaxes inside HTML attributes
+	// <div {{if="" .cond}}> becomes <div {{if .cond}}>
+	re1 := regexp.MustCompile(`\{\{([a-zA-Z]+)="" `)
+	outHTML = re1.ReplaceAllString(outHTML, "{{$1 ")
+
+	// <div {{end}}=""> becomes <div {{end}}>
+	re2 := regexp.MustCompile(`\{\{([^}]+)\}\}=""`)
+	outHTML = re2.ReplaceAllString(outHTML, "{{$1}}")
+
+	// Fix html.Parse escaping quotes inside Go template directives in text nodes
+	// {{if eq .severity &#34;C&#34;}} becomes {{if eq .severity "C"}}
+	re3 := regexp.MustCompile(`\{\{.*?\}\}`)
+	outHTML = re3.ReplaceAllStringFunc(outHTML, func(match string) string {
+		return html.UnescapeString(match)
+	})
+
+	schemaBytes, err := json.Marshal(schema)
+	if err != nil {
+		return nil, "", err
+	}
+
+	if schemaBytes == nil || string(schemaBytes) == "null" {
+		schemaBytes = []byte("[]")
+	}
+
+	return json.RawMessage(schemaBytes), strings.TrimSpace(outHTML), nil
+}
+
+// findElement returns the first element with the given atom in document order.
+func findElement(n *html.Node, a atom.Atom) *html.Node {
+	if n.Type == html.ElementNode && n.DataAtom == a {
+		return n
+	}
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if found := findElement(c, a); found != nil {
+			return found
+		}
+	}
+	return nil
+}

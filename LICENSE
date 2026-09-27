@@ -1,0 +1,10 @@
+The .reb compiler and renderer in this directory (rebcompiler/, rebrender/, cmd/wasm/) are
+dual-licensed, as they were in the Go Rebar repository:
+
+  - under the Business Source License 1.1, as part of the Rebar server (see ../LICENSE.txt), and
+  - under the GNU General Public License v3.0 or later, as part of Rebar Studio, into which
+    cmd/wasm compiles them as WebAssembly.
+
+cmd/rebc/ is part of the Rebar server only (Business Source License 1.1).
+
+Each source file carries its SPDX identifier.
