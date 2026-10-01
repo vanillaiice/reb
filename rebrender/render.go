@@ -98,6 +98,38 @@ func formatNumber(a, b any) string {
 	return strconv.FormatFloat(toFloat(value), 'f', d, 64)
 }
 
+// formatMoney renders an amount with thousands separators after its currency code, as in
+// "QAR 12,500.00". Like formatNumber it accepts the documented form {{formatMoney .val "QAR" 2}}
+// and the pipeline form {{sumColumn .rows "amount" | formatMoney "QAR" 2}}, where the value
+// comes last; the pipeline form is recognized by its integer second argument.
+func formatMoney(a, b, c any) string {
+	value, currency, decimals := a, b, c
+	if isInt(b) {
+		currency, decimals, value = a, b, c
+	}
+	number := formatNumber(value, decimals)
+	sign := ""
+	if strings.HasPrefix(number, "-") {
+		sign, number = "-", number[1:]
+	}
+	whole, fraction, hasFraction := strings.Cut(number, ".")
+	var grouped strings.Builder
+	for i, digit := range whole {
+		if i > 0 && (len(whole)-i)%3 == 0 {
+			grouped.WriteByte(',')
+		}
+		grouped.WriteRune(digit)
+	}
+	out := sign + grouped.String()
+	if hasFraction {
+		out += "." + fraction
+	}
+	if code := strings.TrimSpace(fmt.Sprintf("%v", currency)); code != "" && currency != nil {
+		out = code + " " + out
+	}
+	return out
+}
+
 // CompileHTML parses the raw template HTML markup and executes it with the provided custom context data, returning the final output string.
 func CompileHTML(htmlContent string, data any) (string, error) {
 	tmpl, err := template.New("dynamic_form").Funcs(template.FuncMap{
@@ -151,6 +183,7 @@ func CompileHTML(htmlContent string, data any) (string, error) {
 			return sum
 		},
 		"formatNumber": formatNumber,
+		"formatMoney":  formatMoney,
 		"formatDate": func(layout string, s any) string {
 			if s == nil {
 				return ""

@@ -43,3 +43,19 @@ func TestSafeHTMLMissingValue(t *testing.T) {
 		t.Errorf("got %q", got)
 	}
 }
+
+func TestFormatMoney(t *testing.T) {
+	data := map[string]any{"val": 1234567.891, "neg": "-950", "rows": []any{map[string]any{"amount": "1000"}, map[string]any{"amount": 250.5}}}
+	cases := map[string]string{
+		`{{formatMoney .val "QAR" 2}}`:                       "QAR 1,234,567.89",
+		`{{formatMoney .neg "USD" 0}}`:                       "USD -950",
+		`{{sumColumn .rows "amount" | formatMoney "QAR" 2}}`: "QAR 1,250.50",
+		`{{formatMoney .missing "EUR" 2}}`:                   "EUR 0.00",
+		`{{formatMoney .val "" 1}}`:                          "1,234,567.9",
+	}
+	for src, want := range cases {
+		if got := render(t, src, data); got != want {
+			t.Errorf("%s = %q, want %q", src, got, want)
+		}
+	}
+}

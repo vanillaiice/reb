@@ -21,6 +21,9 @@ package main
 
 import (
 	"encoding/json"
+	"math"
+	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall/js"
@@ -212,56 +215,108 @@ func sampleRows(cols []column) []map[string]any {
 	return rows
 }
 
-// evalFormula evaluates a simple left-to-right arithmetic expression over the
-// row's columns, e.g. "quantity*unit_price". Operands are column names or
-// numeric literals; supported operators are + - * /. Unknown forms yield 0.
+// evalFormula evaluates a table formula over the row's columns the way the mobile app, the web form
+// and the server do (client/mobile/utils/formula.ts, lib/reb/formula.rb): column names become the
+// row's numbers, other names 0, then + - * / and parentheses with the usual precedence; dividing by
+// zero gives 0.
 func evalFormula(expr string, row map[string]any) float64 {
+	keys := make([]string, 0, len(row))
+	for key := range row {
+		keys = append(keys, key)
+	}
+	sort.Slice(keys, func(i, j int) bool { return len(keys[i]) > len(keys[j]) })
+	for _, key := range keys {
+		pattern := regexp.MustCompile(`\b` + regexp.QuoteMeta(key) + `\b`)
+		expr = pattern.ReplaceAllString(expr, strconv.FormatFloat(toFloat(row[key]), 'f', -1, 64))
+	}
+	expr = regexp.MustCompile(`[a-zA-Z_]\w*`).ReplaceAllString(expr, "0")
+
 	var tokens []string
-	var cur strings.Builder
-	for _, ch := range expr {
-		switch ch {
-		case '+', '-', '*', '/':
-			if cur.Len() > 0 {
-				tokens = append(tokens, strings.TrimSpace(cur.String()))
-				cur.Reset()
-			}
+	for i := 0; i < len(expr); {
+		ch := expr[i]
+		switch {
+		case strings.ContainsRune("+-*/()", rune(ch)):
 			tokens = append(tokens, string(ch))
+			i++
+		case ch == '.' || (ch >= '0' && ch <= '9'):
+			j := i
+			for j < len(expr) && (expr[j] == '.' || (expr[j] >= '0' && expr[j] <= '9')) {
+				j++
+			}
+			tokens = append(tokens, expr[i:j])
+			i = j
 		default:
-			cur.WriteRune(ch)
+			i++
 		}
 	}
-	if cur.Len() > 0 {
-		tokens = append(tokens, strings.TrimSpace(cur.String()))
+
+	precedence := map[string]int{"+": 1, "-": 1, "*": 2, "/": 2}
+	isNumber := func(token string) bool {
+		_, err := strconv.ParseFloat(strings.TrimRight(token, "."), 64)
+		return err == nil && token != "."
 	}
-	if len(tokens) == 0 {
+	var output, operators []string
+	for _, token := range tokens {
+		switch {
+		case isNumber(token):
+			output = append(output, token)
+		case precedence[token] > 0:
+			for len(operators) > 0 && precedence[operators[len(operators)-1]] >= precedence[token] {
+				output = append(output, operators[len(operators)-1])
+				operators = operators[:len(operators)-1]
+			}
+			operators = append(operators, token)
+		case token == "(":
+			operators = append(operators, token)
+		case token == ")":
+			for len(operators) > 0 && operators[len(operators)-1] != "(" {
+				output = append(output, operators[len(operators)-1])
+				operators = operators[:len(operators)-1]
+			}
+			if len(operators) > 0 {
+				operators = operators[:len(operators)-1]
+			}
+		}
+	}
+	for len(operators) > 0 {
+		output = append(output, operators[len(operators)-1])
+		operators = operators[:len(operators)-1]
+	}
+
+	var stack []float64
+	pop := func() float64 {
+		if len(stack) == 0 {
+			return 0
+		}
+		value := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		return value
+	}
+	for _, token := range output {
+		if isNumber(token) {
+			stack = append(stack, toFloat(token))
+			continue
+		}
+		right, left := pop(), pop()
+		switch token {
+		case "+":
+			stack = append(stack, left+right)
+		case "-":
+			stack = append(stack, left-right)
+		case "*":
+			stack = append(stack, left*right)
+		case "/":
+			if right == 0 {
+				stack = append(stack, 0)
+			} else {
+				stack = append(stack, left/right)
+			}
+		}
+	}
+	if len(stack) == 0 || math.IsInf(stack[0], 0) || math.IsNaN(stack[0]) {
 		return 0
 	}
-
-	resolve := func(tok string) float64 {
-		if v, ok := row[tok]; ok {
-			return toFloat(v)
-		}
-		f, _ := strconv.ParseFloat(tok, 64)
-		return f
-	}
-
-	acc := resolve(tokens[0])
-	for i := 1; i+1 < len(tokens); i += 2 {
-		rhs := resolve(tokens[i+1])
-		switch tokens[i] {
-		case "+":
-			acc += rhs
-		case "-":
-			acc -= rhs
-		case "*":
-			acc *= rhs
-		case "/":
-			if rhs != 0 {
-				acc /= rhs
-			}
-		}
-	}
-	return acc
+	return stack[0]
 }
 
 func toFloat(v any) float64 {
