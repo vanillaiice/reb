@@ -1,9 +1,11 @@
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 hblabs
+//
+// Part of reb, the .reb template engine (see /LICENSE).
 
-// Command rebc is the .reb pipeline for the Rails application: the same compiler and renderer
-// that Rebar Studio runs as WebAssembly, behind a JSON-in, JSON-out command line so Ruby can call
-// it (guide chapter 07, lib/reb.rb).
+// Command rebc is the .reb pipeline for server-side callers (Rebar calls it from Rails): the same
+// compiler and renderer that Rebar Studio runs as WebAssembly, behind a JSON-in, JSON-out command
+// line so any language can call it.
 //
 //	rebc compile   stdin {"reb": "..."}                               stdout {"schema": [...], "html": "..."}
 //	rebc render    stdin {"html", "system", "answers", "assets"}      stdout {"html": "..."}
@@ -22,8 +24,8 @@ import (
 
 	"github.com/microcosm-cc/bluemonday"
 
-	"github.com/vanillaiice/rebar-on-rails/reb/rebcompiler"
-	"github.com/vanillaiice/rebar-on-rails/reb/rebrender"
+	"github.com/vanillaiice/reb/rebcompiler"
+	"github.com/vanillaiice/reb/rebrender"
 )
 
 // maxInput bounds what rebc reads, so a runaway caller cannot exhaust memory.

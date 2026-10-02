@@ -1,9 +1,7 @@
-// SPDX-License-Identifier: BUSL-1.1 OR GPL-3.0-or-later
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 hblabs
 //
-// Dual-licensed: BUSL-1.1 as part of the rebar server (/server/LICENSE.txt) and
-// GPL-3.0-or-later as part of Rebar Studio (/rebar-studio/LICENSE), which
-// compiles this package to WebAssembly.
+// Part of reb, the .reb template engine (see /LICENSE).
 
 package rebcompiler
 

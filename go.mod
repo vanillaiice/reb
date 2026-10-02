@@ -1,4 +1,4 @@
-module github.com/vanillaiice/rebar-on-rails/reb
+module github.com/vanillaiice/reb
 
 go 1.26.2
 

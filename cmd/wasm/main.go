@@ -1,12 +1,9 @@
 //go:build js && wasm
 
-// SPDX-License-Identifier: BUSL-1.1 OR GPL-3.0-or-later
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 hblabs
 //
-// Dual-licensed: under the Business Source License 1.1 as part of the rebar
-// server (see /server/LICENSE.txt), and under the GNU GPL v3.0-or-later as part
-// of Rebar Studio (see /rebar-studio/LICENSE), into which this file is
-// compiled (WebAssembly).
+// Part of reb, the .reb template engine (see /LICENSE).
 
 // Command wasm is the WebAssembly build of the .reb pipeline. It exposes the
 // real Go compiler (pkg/rebcompiler) and template executor (pkg/rebrender) to
@@ -29,8 +26,8 @@ import (
 	"syscall/js"
 	"time"
 
-	"github.com/vanillaiice/rebar-on-rails/reb/rebcompiler"
-	"github.com/vanillaiice/rebar-on-rails/reb/rebrender"
+	"github.com/vanillaiice/reb/rebcompiler"
+	"github.com/vanillaiice/reb/rebrender"
 )
 
 func main() {

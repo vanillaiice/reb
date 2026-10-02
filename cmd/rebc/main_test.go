@@ -1,5 +1,7 @@
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 hblabs
+//
+// Part of reb, the .reb template engine (see /LICENSE).
 
 package main
 
