@@ -32,13 +32,34 @@ var (
 	fieldName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 )
 
-// RebFieldSchema represents the JSON schema structure expected by the frontend.
+// RebFieldSchema is one declared field, as the tag wrote it (the "raw" schema, schemaVersion 1, which
+// the Go API and the mobile app read). rebdoc.Normalize turns it into typed fields.
 type RebFieldSchema struct {
 	Key     string   `json:"key"`
 	Type    string   `json:"type"`
 	Label   string   `json:"label"`
 	Options []string `json:"options,omitempty"`
+
+	// Spec v1.1 attributes (docs/specification.md section 3), omitted when absent.
+	Required    bool   `json:"required,omitempty"`
+	Help        string `json:"help,omitempty"`
+	Placeholder string `json:"placeholder,omitempty"`
+	Default     string `json:"default,omitempty"`
+	Min         string `json:"min,omitempty"`
+	Max         string `json:"max,omitempty"`
+	Step        string `json:"step,omitempty"`
+	Pattern     string `json:"pattern,omitempty"`
+	ShowIf      string `json:"showIf,omitempty"`
 }
+
+// Error is a compile error a caller can translate: Code names the problem, Params fill the message.
+type Error struct {
+	Code    string
+	Params  map[string]string
+	Message string
+}
+
+func (e *Error) Error() string { return e.Message }
 
 // Compile takes raw HTML with custom <reb-*> tags, extracts the field schema,
 // and replaces the custom tags with native go html/template bindings.
@@ -71,6 +92,15 @@ func Compile(rawHTML string) (json.RawMessage, string, error) {
 			}
 		}
 		return ""
+	}
+	// A boolean attribute: present (required, required="", required="required") unless "false".
+	hasFlag := func(n *html.Node, key string) bool {
+		for _, attr := range n.Attr {
+			if attr.Key == key {
+				return !strings.EqualFold(strings.TrimSpace(attr.Val), "false")
+			}
+		}
+		return false
 	}
 
 	var walk func(*html.Node, string)
@@ -110,7 +140,11 @@ func Compile(rawHTML string) (json.RawMessage, string, error) {
 			// The name becomes a Go template field ({{.name}}), so anything else
 			// (e.g. "site-name") would compile here and only fail at render time.
 			if name != "" && !fieldName.MatchString(name) && walkErr == nil {
-				walkErr = fmt.Errorf("invalid field name %q on <%s>: use letters, digits and underscores, starting with a letter or underscore", name, n.Data)
+				walkErr = &Error{
+					Code:    "invalid_field_name",
+					Params:  map[string]string{"name": name, "tag": n.Data},
+					Message: fmt.Sprintf("invalid field name %q on <%s>: use letters, digits and underscores, starting with a letter or underscore", name, n.Data),
+				}
 			}
 
 			if name != "" {
@@ -124,9 +158,18 @@ func Compile(rawHTML string) (json.RawMessage, string, error) {
 				}
 
 				field := RebFieldSchema{
-					Key:   name,
-					Type:  schemaType,
-					Label: label,
+					Key:         name,
+					Type:        schemaType,
+					Label:       label,
+					Required:    hasFlag(n, "required"),
+					Help:        getAttr(n, "help"),
+					Placeholder: getAttr(n, "placeholder"),
+					Default:     getAttr(n, "default"),
+					Min:         strings.TrimSpace(getAttr(n, "min")),
+					Max:         strings.TrimSpace(getAttr(n, "max")),
+					Step:        strings.TrimSpace(getAttr(n, "step")),
+					Pattern:     getAttr(n, "pattern"),
+					ShowIf:      strings.TrimSpace(getAttr(n, "show-if")),
 				}
 
 				if opts := getAttr(n, "options"); opts != "" {
@@ -183,10 +226,11 @@ func Compile(rawHTML string) (json.RawMessage, string, error) {
 				goto WalkChildren
 			}
 
-			// If it's a footer block, hide it. The PDF client will rip it out later.
-			if rebType == "footer" {
+			// A footer or header block is hidden: the PDF client moves it into the page margins
+			// (Chromium's footer and header templates; paged.js running elements in a browser).
+			if rebType == "footer" || rebType == "header" {
 				n.Type = html.ElementNode
-				n.Data = "rebar-pdf-footer-extract"
+				n.Data = "rebar-pdf-" + rebType + "-extract"
 				var newAttrs []html.Attribute
 				newAttrs = append(newAttrs, html.Attribute{Key: "style", Val: "display:none;"})
 				if c := getAttr(n, "class"); c != "" {

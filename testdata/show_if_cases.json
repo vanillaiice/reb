@@ -1,0 +1,32 @@
+{
+  "comment": "show-if conditions (docs/specification.md section 3.3). Every evaluator runs these: rebdoc (Go) and each form's own evaluator.",
+  "cases": [
+    { "expression": "", "answers": {}, "expected": true },
+    { "expression": "permit", "answers": { "permit": "Yes" }, "expected": true },
+    { "expression": "permit", "answers": { "permit": "  " }, "expected": false },
+    { "expression": "permit", "answers": {}, "expected": false },
+    { "expression": "safe", "answers": { "safe": true }, "expected": true },
+    { "expression": "safe", "answers": { "safe": false }, "expected": false },
+    { "expression": "safe", "answers": { "safe": "false" }, "expected": false },
+    { "expression": "photos", "answers": { "photos": [] }, "expected": false },
+    { "expression": "photos", "answers": { "photos": ["blob:1"] }, "expected": true },
+    { "expression": "crew", "answers": { "crew": 0 }, "expected": false },
+    { "expression": "crew", "answers": { "crew": "0" }, "expected": true },
+    { "expression": "kind == 'Hot work'", "answers": { "kind": "Hot work" }, "expected": true },
+    { "expression": "kind == \"Hot work\"", "answers": { "kind": " Hot work " }, "expected": true },
+    { "expression": "kind == 'Hot work'", "answers": { "kind": "Cold work" }, "expected": false },
+    { "expression": "kind != 'Hot work'", "answers": {}, "expected": true },
+    { "expression": "safe == 'true'", "answers": { "safe": true }, "expected": true },
+    { "expression": "crew == 3", "answers": { "crew": "3" }, "expected": true },
+    { "expression": "crew == 3", "answers": { "crew": 3 }, "expected": true },
+    { "expression": "not safe", "answers": { "safe": false }, "expected": true },
+    { "expression": "not not safe", "answers": { "safe": true }, "expected": true },
+    { "expression": "a and b", "answers": { "a": "x", "b": "" }, "expected": false },
+    { "expression": "a or b", "answers": { "a": "x", "b": "" }, "expected": true },
+    { "expression": "a or b and c", "answers": { "a": "x", "b": "", "c": "" }, "expected": true },
+    { "expression": "(a or b) and c", "answers": { "a": "x", "b": "", "c": "" }, "expected": false },
+    { "expression": "kind == 'Hot work' and not safe", "answers": { "kind": "Hot work", "safe": false }, "expected": true },
+    { "expression": "kind=='A'or kind=='B'", "answers": { "kind": "B" }, "expected": true }
+  ],
+  "invalid": ["kind ==", "(a", "a b", "kind = 'x'", "'open", "a and", "#x"]
+}

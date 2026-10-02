@@ -7,24 +7,27 @@
 // compiler and renderer that Rebar Studio runs as WebAssembly, behind a JSON-in, JSON-out command
 // line so any language can call it.
 //
-//	rebc compile   stdin {"reb": "..."}                               stdout {"schema": [...], "html": "..."}
-//	rebc render    stdin {"html", "system", "answers", "assets"}      stdout {"html": "..."}
+//	rebc compile    {"reb"}                                            -> {"schema", "fields", "html", "engineVersion", "warnings"}
+//	rebc prepare    {"fields" | "schema", "answers"}                   -> {"answers", "errors"}
+//	rebc render     {"html", "system", "answers", "assets", "fields"?} -> {"html"}
+//	rebc normalize  {"schema"}                                         -> {"schemaVersion", "fields"}
+//	rebc version                                                       -> {"version"}
 //
-// On failure it exits with status 1 and prints {"error": "..."}. Input always arrives on stdin,
-// never as arguments.
+// "schema" is the compiler's raw schema, "fields" the normalized one (rebdoc.Schema). On failure rebc
+// exits with status 1 and prints {"error", "code"?, "params"?}. Input always arrives on stdin, never
+// as arguments.
 package main
 
 import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"html/template"
 	"io"
 	"os"
 
-	"github.com/microcosm-cc/bluemonday"
-
+	"github.com/vanillaiice/reb"
 	"github.com/vanillaiice/reb/rebcompiler"
+	"github.com/vanillaiice/reb/rebdoc"
 	"github.com/vanillaiice/reb/rebrender"
 )
 
@@ -33,7 +36,7 @@ const maxInput = 32 << 20
 
 func main() {
 	if len(os.Args) != 2 {
-		fail(errors.New("usage: rebc compile|render < input.json"))
+		fail(errors.New("usage: rebc compile|prepare|render|normalize|version < input.json"))
 	}
 	input, err := io.ReadAll(io.LimitReader(os.Stdin, maxInput+1))
 	if err != nil {
@@ -53,7 +56,13 @@ func main() {
 }
 
 func fail(err error) {
-	out, _ := json.Marshal(map[string]string{"error": err.Error()})
+	var coded *rebdoc.Error
+	var out []byte
+	if errors.As(err, &coded) {
+		out, _ = json.Marshal(coded)
+	} else {
+		out, _ = json.Marshal(map[string]string{"error": err.Error()})
+	}
 	os.Stdout.Write(out)
 	os.Exit(1)
 }
@@ -62,104 +71,96 @@ func run(command string, input []byte) ([]byte, error) {
 	switch command {
 	case "compile":
 		return compile(input)
+	case "prepare":
+		return prepare(input)
 	case "render":
 		return render(input)
+	case "normalize":
+		return normalize(input)
+	case "version":
+		return json.Marshal(map[string]string{"version": reb.Version})
 	default:
-		return nil, fmt.Errorf("unknown command %q (use compile or render)", command)
+		return nil, fmt.Errorf("unknown command %q (use compile, prepare, render, normalize or version)", command)
 	}
 }
 
-type compileInput struct {
-	Reb string `json:"reb"`
+func decode(input []byte, into any) error {
+	if err := json.Unmarshal(input, into); err != nil {
+		return fmt.Errorf("invalid input: %w", err)
+	}
+	return nil
 }
 
 func compile(input []byte) ([]byte, error) {
-	var in compileInput
-	if err := json.Unmarshal(input, &in); err != nil {
-		return nil, fmt.Errorf("invalid input: %w", err)
+	var in struct {
+		Reb string `json:"reb"`
 	}
-	schema, html, err := rebcompiler.Compile(in.Reb)
+	if err := decode(input, &in); err != nil {
+		return nil, err
+	}
+	compiled, err := rebdoc.Compile(in.Reb)
 	if err != nil {
 		return nil, err
 	}
-	return json.Marshal(map[string]any{"schema": schema, "html": html})
+	return json.Marshal(compiled)
 }
 
-type renderInput struct {
-	HTML    string            `json:"html"`
-	System  map[string]any    `json:"system"`
-	Answers map[string]any    `json:"answers"`
-	Assets  map[string]string `json:"assets"`
+// schemaInput accepts the normalized schema ("fields") or the raw one ("schema").
+type schemaInput struct {
+	Fields *rebdoc.Schema               `json:"fields"`
+	Schema []rebcompiler.RebFieldSchema `json:"schema"`
+}
+
+func (s schemaInput) resolve() *rebdoc.Schema {
+	if s.Fields != nil {
+		return s.Fields
+	}
+	if s.Schema != nil {
+		normalized := rebdoc.Normalize(s.Schema)
+		return &normalized
+	}
+	return nil
+}
+
+func prepare(input []byte) ([]byte, error) {
+	var in struct {
+		schemaInput
+		Answers map[string]any `json:"answers"`
+	}
+	if err := decode(input, &in); err != nil {
+		return nil, err
+	}
+	schema := in.resolve()
+	if schema == nil {
+		return nil, errors.New("prepare needs fields or schema")
+	}
+	return json.Marshal(rebdoc.Prepare(*schema, in.Answers))
 }
 
 func render(input []byte) ([]byte, error) {
-	var in renderInput
-	if err := json.Unmarshal(input, &in); err != nil {
-		return nil, fmt.Errorf("invalid input: %w", err)
+	var in struct {
+		schemaInput
+		HTML    string            `json:"html"`
+		System  map[string]any    `json:"system"`
+		Answers map[string]any    `json:"answers"`
+		Assets  map[string]string `json:"assets"`
 	}
-	html, err := rebrender.CompileHTML(in.HTML, buildContext(in.System, in.Answers, in.Assets))
+	if err := decode(input, &in); err != nil {
+		return nil, err
+	}
+	html, err := rebrender.CompileHTML(in.HTML, rebdoc.BuildContext(in.System, in.Answers, in.Assets, in.resolve()))
 	if err != nil {
 		return nil, err
 	}
 	return json.Marshal(map[string]string{"html": html})
 }
 
-// buildContext reproduces the Go API's document export (server/internal/documents, export
-// handler): file references in the answers are replaced by the names the PDF request sends the
-// files under, including inside table rows; answers are flattened into the root without
-// overriding system keys, and remain available as .Answers; plain strings are sanitized with
-// bluemonday's UGC policy and passed as HTML (rich textarea content), while replaced file
-// references stay plain strings so templates can use them in src attributes.
-func buildContext(system, answers map[string]any, assets map[string]string) map[string]any {
-	if answers == nil {
-		answers = map[string]any{}
+func normalize(input []byte) ([]byte, error) {
+	var in struct {
+		Schema []rebcompiler.RebFieldSchema `json:"schema"`
 	}
-	isAsset := map[string]bool{}
-	for key, value := range answers {
-		switch val := value.(type) {
-		case string:
-			if name, ok := assets[val]; ok {
-				answers[key] = name
-				isAsset[key] = true
-			}
-		case []any:
-			for i, item := range val {
-				switch it := item.(type) {
-				case string:
-					if name, ok := assets[it]; ok {
-						val[i] = name
-					}
-				case map[string]any:
-					for column, cell := range it {
-						if s, ok := cell.(string); ok {
-							if name, ok := assets[s]; ok {
-								it[column] = name
-							}
-						}
-					}
-				}
-			}
-		}
+	if err := decode(input, &in); err != nil {
+		return nil, err
 	}
-
-	context := make(map[string]any, len(system)+len(answers)+1)
-	for key, value := range system {
-		context[key] = value
-	}
-	if _, exists := context["Answers"]; !exists {
-		context["Answers"] = answers
-	}
-
-	sanitizer := bluemonday.UGCPolicy()
-	for key, value := range answers {
-		if _, exists := context[key]; exists {
-			continue
-		}
-		if s, ok := value.(string); ok && !isAsset[key] {
-			context[key] = template.HTML(sanitizer.Sanitize(s))
-		} else {
-			context[key] = value
-		}
-	}
-	return context
+	return json.Marshal(rebdoc.Normalize(in.Schema))
 }

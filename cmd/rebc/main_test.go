@@ -96,3 +96,57 @@ func TestUnknownCommand(t *testing.T) {
 		t.Fatal("expected an error")
 	}
 }
+
+func TestCompileReturnsNormalizedFieldsAndEngineVersion(t *testing.T) {
+	out := runJSON(t, "compile", map[string]string{"reb": `<reb-text name="site" label="Site" required help="Gate code"></reb-text>`})
+
+	fields := out["fields"].(map[string]any)
+	first := fields["fields"].([]any)[0].(map[string]any)
+	if fields["schemaVersion"] != 2.0 || first["kind"] != "text" || first["required"] != true || first["help"] != "Gate code" {
+		t.Errorf("fields = %v", fields)
+	}
+	if out["engineVersion"] == "" || len(out["warnings"].([]any)) != 0 {
+		t.Errorf("engine version and no warnings expected: %v", out)
+	}
+}
+
+func TestCodedErrorsCarryCodeAndParams(t *testing.T) {
+	_, err := run("compile", []byte(`{"reb": "<reb-text name=\"site-name\" label=\"x\"></reb-text>"}`))
+	var coded interface{ Error() string }
+	if coded = err; coded == nil {
+		t.Fatal("expected an error")
+	}
+	out, _ := json.Marshal(err)
+	if !strings.Contains(string(out), `"code":"invalid_field_name"`) || !strings.Contains(string(out), `"name":"site-name"`) {
+		t.Errorf("error JSON = %s", out)
+	}
+}
+
+func TestPrepareFromRawOrNormalizedSchema(t *testing.T) {
+	raw := []map[string]any{{"key": "items", "type": "table", "options": []string{"qty:number", "total:formula[qty*3|0]"}}, {"key": "crew", "type": "number"}}
+	for _, input := range []map[string]any{
+		{"schema": raw, "answers": map[string]any{"items": []any{map[string]any{"qty": "2"}}, "crew": "x"}},
+		{"fields": runJSON(t, "normalize", map[string]any{"schema": raw}), "answers": map[string]any{"items": []any{map[string]any{"qty": "2"}}, "crew": "x"}},
+	} {
+		out := runJSON(t, "prepare", input)
+		row := out["answers"].(map[string]any)["items"].([]any)[0].(map[string]any)
+		errs := out["errors"].([]any)
+		if row["total"] != "6" || len(errs) != 1 || errs[0].(map[string]any)["code"] != "not_a_number" {
+			t.Errorf("prepare = %v", out)
+		}
+	}
+}
+
+func TestRenderWithFieldsTurnsTextAreasIntoParagraphs(t *testing.T) {
+	fields := runJSON(t, "normalize", map[string]any{"schema": []map[string]any{{"key": "notes", "type": "textarea"}}})
+	out := runJSON(t, "render", map[string]any{"html": "{{.notes}}", "answers": map[string]any{"notes": "a\n\nb <c>"}, "fields": fields})
+	if out["html"] != "<p>a</p><p>b &lt;c&gt;</p>" {
+		t.Errorf("html = %v", out["html"])
+	}
+}
+
+func TestVersion(t *testing.T) {
+	if out := runJSON(t, "version", map[string]any{}); !strings.HasPrefix(out["version"].(string), "v") {
+		t.Errorf("version = %v", out)
+	}
+}

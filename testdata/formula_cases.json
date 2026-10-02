@@ -1,0 +1,177 @@
+[
+ {
+  "expression": "qty*rate",
+  "row": {
+   "qty": "3",
+   "rate": "2.5"
+  },
+  "precision": 2,
+  "expected": "7.50"
+ },
+ {
+  "expression": "unit_price*qty",
+  "row": {
+   "unit_price": "12.345",
+   "qty": "2"
+  },
+  "precision": 2,
+  "expected": "24.69"
+ },
+ {
+  "expression": "a+b*c",
+  "row": {
+   "a": "1",
+   "b": "2",
+   "c": "3"
+  },
+  "precision": 2,
+  "expected": "7.00"
+ },
+ {
+  "expression": "(a+b)*c",
+  "row": {
+   "a": "1",
+   "b": "2",
+   "c": "3"
+  },
+  "precision": 0,
+  "expected": "9"
+ },
+ {
+  "expression": "a/b",
+  "row": {
+   "a": "1",
+   "b": "0"
+  },
+  "precision": 2,
+  "expected": "0.00"
+ },
+ {
+  "expression": "a/b",
+  "row": {
+   "a": "10",
+   "b": "3"
+  },
+  "precision": 4,
+  "expected": "3.3333"
+ },
+ {
+  "expression": "qty*rate",
+  "row": {
+   "qty": "",
+   "rate": "2"
+  },
+  "precision": 2,
+  "expected": "0.00"
+ },
+ {
+  "expression": "qty*rate",
+  "row": {
+   "qty": "12abc",
+   "rate": "2"
+  },
+  "precision": 2,
+  "expected": "24.00"
+ },
+ {
+  "expression": "qty*rate",
+  "row": {
+   "qty": "-2.5",
+   "rate": "1"
+  },
+  "precision": 0,
+  "expected": "-3"
+ },
+ {
+  "expression": "qty*rate",
+  "row": {
+   "qty": "2.5",
+   "rate": "1"
+  },
+  "precision": 0,
+  "expected": "3"
+ },
+ {
+  "expression": "x*2",
+  "row": {
+   "x": "1.005"
+  },
+  "precision": 2,
+  "expected": "2.01"
+ },
+ {
+  "expression": "qty * unknown + 4",
+  "row": {
+   "qty": "3"
+  },
+  "precision": 2,
+  "expected": "4.00"
+ },
+ {
+  "expression": "q*qty",
+  "row": {
+   "q": "2",
+   "qty": "5"
+  },
+  "precision": 2,
+  "expected": "10.00"
+ },
+ {
+  "expression": "a-b",
+  "row": {
+   "a": "0.1",
+   "b": "0.3"
+  },
+  "precision": 2,
+  "expected": "-0.20"
+ },
+ {
+  "expression": "a+b",
+  "row": {
+   "a": "0.1",
+   "b": "0.2"
+  },
+  "precision": 17,
+  "expected": "0.30000000000000004"
+ },
+ {
+  "expression": "2*-3",
+  "row": {},
+  "precision": 2,
+  "expected": "-3.00"
+ },
+ {
+  "expression": "a*b",
+  "row": {
+   "a": true,
+   "b": "4"
+  },
+  "precision": 2,
+  "expected": "0.00"
+ },
+ {
+  "expression": "a*1000000",
+  "row": {
+   "a": "123456.789"
+  },
+  "precision": 3,
+  "expected": "123456789000.000"
+ },
+ {
+  "expression": "a/b",
+  "row": {
+   "a": "-0.001",
+   "b": "1"
+  },
+  "precision": 2,
+  "expected": "-0.00"
+ },
+ {
+  "expression": "((a)",
+  "row": {
+   "a": "5"
+  },
+  "precision": 1,
+  "expected": "0.0"
+ }
+]

@@ -40,20 +40,63 @@ Instead of a separate metadata block, `.reb` files use inline custom tags to dec
 * `<reb-tailwind>`: **Configuration element.** Injects the Tailwind CSS compiler into the PDF renderer, allowing you to use native Tailwind utility classes.
 * `<reb-pagebreak>`: **Layout element.** Forces a hard page break in the output PDF document (`page-break-after: always`).
 * `<reb-footer>`: **Layout element.** Defines a repeating footer for the PDF document. Use `<span class="pageNumber"></span>` and `<span class="totalPages"></span>` inside it for automatic Gotenberg pagination!
+* `<reb-header>`: **Layout element (v1.1).** The counterpart of `<reb-footer>`, repeated at the top of every page, with the same page-number spans.
+* `<reb-checkbox>`: **(v1.1)** A tick box; the answer is `true` or `false`, so test it with `{{if .name}}`.
+* `<reb-radio>`: Choices shown as radio buttons; `options` as for `<reb-select>`.
+* `<reb-attachments>`: Like `<reb-photogrid>` (a list of images).
 * `<reb-text>`: Standard single-line text input.
 * `<reb-number>`: Numeric parameters.
 * `<reb-textarea>`: Multi-line text block.
 * `<reb-date>`: Interactive calendar date-picker.
 * `<reb-select>`: Dropdown selection box.
 * `<reb-photogrid>`: Renders an upload zone for multiple photos.
-* `<reb-signature>`: Digital signature pad capturing canvas strokes as SVG.
+* `<reb-signature>`: Digital signature pad; the signature is stored as a PNG image.
 
-### Element Attributes:
+### 3.1 Element Attributes
 Every `<reb-*>` element supports the following attributes:
 * **`name`** (`string`, Required): The unique alphanumeric identifier for the field. Used as the binding key in the JSON schema and Go template. Must match regex `^[A-Za-z_][A-Za-z0-9_]*$` (letters, digits and underscores, not starting with a digit); the compiler rejects anything else, because the name becomes a `{{.name}}` template binding.
 * **`label`** (`string`, Required): The human-readable label rendered next to the input field in the web client.
 * **`options`** (`comma-separated string`, Optional): Mandated only when using `<reb-select>`. Represents allowed selection values (e.g., `options="High,Medium,Low"`).
 * **`class`** (`string`, Optional): Standard CSS/Tailwind classes to apply to the output element during PDF generation.
+
+### 3.2 Form behaviour attributes (v1.1)
+These change how the form asks for the answer; they do not change the PDF layout. Every consumer
+(Rebar's web form and server, Rebar Studio) enforces them the same way, through the engine.
+
+* **`required`**: the field must be answered (a checkbox must be ticked, a photo grid or table must
+  have at least one entry). Only checked while the field is shown (see `show-if`).
+* **`help`**: a hint shown under the input.
+* **`placeholder`**: text shown in an empty text or number input.
+* **`default`**: the value a new document starts with. `default="today"` on a date is the day the
+  document is created; `default="true"` ticks a checkbox.
+* **`min`**, **`max`**: bounds for a number, or for a date written `YYYY-MM-DD`.
+* **`step`**: the increment a number input offers (a hint, not checked).
+* **`pattern`**: a regular expression the whole text answer must match (as HTML's `pattern`).
+* **`show-if`**: the field is shown only while this condition holds (3.3). A hidden field's answer
+  is not kept.
+
+### 3.3 `show-if` conditions
+A condition reads other fields' answers:
+
+```
+expression := or
+or         := and ("or" and)*
+and        := not ("and" not)*
+not        := "not" not | comparison
+comparison := operand (("==" | "!=") operand)?
+operand    := field_name | 'text' | "text" | number | "(" expression ")"
+```
+
+* A field alone is true when it is answered: non-blank text other than `false`, a ticked
+  checkbox, a non-empty list, a number other than 0.
+* `==` and `!=` compare the answers as trimmed text: a checkbox reads `true` or `false`, a
+  missing answer reads as empty.
+* Conditions are evaluated repeatedly, so a field shown only by a hidden field is hidden as well.
+* Examples: `show-if="work_type == 'Hot work'"`, `show-if="permit and not isolated"`,
+  `show-if="(shift == 'Night' or crew != 0) and lighting"`.
+
+A condition that does not parse is a compile error; a condition naming a field the template does not
+declare is a warning. The cases in `testdata/show_if_cases.json` define the behaviour.
 
 ---
 
@@ -171,6 +214,9 @@ The PDF compiler registers custom Go template functions for complex layout formu
 - `{{divide .numerator .denominator}}`
 - `{{sumColumn .my_table "amount"}}`: Extracts all rows from a table array, plucks the target key, and calculates the total sum.
 - `{{formatNumber .val 2}}`: Forces floating point numbers to render with the specified number of decimal places.
+- `{{formatMoney .val "QAR" 2}}`: A number with thousands separators, the given decimals and the currency code (also `{{sumColumn .rows "total" | formatMoney "QAR" 2}}`).
+- `{{formatDate "02/01/2006" .day}}`: A date answer in Go's layout notation; `{{now | formatDate "02/01/2006"}}` prints today.
+- `{{safeHTML .value}}`: Prints a value as HTML (empty when missing).
 
 **Example Grand Total:**
 ```html
@@ -181,7 +227,45 @@ The PDF compiler registers custom Go template functions for complex layout formu
 
 ---
 
-## 5. Tokenization & Parsing Strategy (For Parsers & AI)
+## 5. Rendering documents
+
+### 5.1 System values
+Besides its own fields, a template can print these values of the document. A consumer passes them
+all (empty when it has none); an answer never overrides one.
+
+| Value | Meaning |
+|---|---|
+| `{{.ID}}` | the document's identifier |
+| `{{.Name}}` | the document's title |
+| `{{.Number}}`, `{{.Reference}}` | its number in the project, and its reference (e.g. `D-12`) |
+| `{{.ProjectName}}` | the project's name |
+| `{{.ReporterName}}` | who created the document |
+| `{{.TemplateName}}` | the template's name |
+| `{{.CreatedAt}}` | when it was created (ISO 8601; format with `formatDate`) |
+| `{{.OrganizationName}}` | the organization (or, in Rebar Studio, the profile) the document belongs to |
+| `{{.OrganizationLogo}}` | its logo as an image source (`<img src="{{.OrganizationLogo}}">`), empty when there is none |
+| `{{.Attachments}}`, `{{.Photos}}` | the document's files (each with `.FileName`, `.ObjectKey` as image source) |
+| `{{.Answers}}` | all the answers, also available at the top level |
+
+### 5.2 Template assets
+A template may carry images (a logo, a stamp). It refers to them by bare file name,
+`<img src="logo.png">` or `url(logo.png)` in CSS, never by URL: no renderer has network access. A
+consumer delivers the files under those names (Rebar sends them to Gotenberg next to the page;
+Rebar Studio packs them into `.rebpack` files under `assets/`). File names use letters, digits, `.`,
+`-` and `_`.
+
+### 5.3 Answers in the template
+* File answers (photos, signatures, photo cells) arrive as the file names the renderer receives,
+  usable in `src`.
+* Text areas hold plain text. They render as paragraphs: a blank line starts a new paragraph, a line
+  break becomes `<br>`, and the text is escaped.
+* Other text answers are sanitized HTML (bluemonday's UGC policy).
+* Table rows are lists of objects keyed by column; formula and row-number cells are computed by the
+  engine (`testdata/formula_cases.json`), whatever the form sent.
+
+---
+
+## 6. Tokenization & Parsing Strategy (For Parsers & AI)
 When compiling a `.reb` template, compilers or AI parsers should follow this process:
 
 ### Phase 1: AST Extraction
@@ -195,7 +279,7 @@ Mutate the `<reb-*>` nodes in the AST in-place. Change the node tag to `span` (o
 
 ---
 
-## 6. Complete Valid File Example
+## 7. Complete Valid File Example
 
 ```html
 <!-- REBAR COMPILER v1.0 SPECIFICATION STANDARD -->
@@ -251,3 +335,37 @@ Mutate the `<reb-*>` nodes in the AST in-place. Change the node tag to `span` (o
   </div>
 </reb-footer>
 ```
+
+---
+
+## 8. Engine interface
+
+The engine (this repository) is the only implementation of the rules above. Consumers call it as
+`rebc` (JSON on stdin and stdout) or as the WebAssembly build (`__rebCompile`, `__rebPrepare`,
+`__rebRender`, `__rebVersion`).
+
+### 8.1 Schemas
+`compile` returns two schemas. `schema` is the raw list the tags declared (`key`, `type`, `label`,
+`options` and the v1.1 attributes; schemaVersion 1, read by older clients). `fields` is the normalized
+schema, `{"schemaVersion": 2, "fields": [...]}`: each field has a `kind` (`section`, `text`,
+`number`, `date`, `textarea`, `select`, `checkbox`, `images`, `signature`, `table`; aliases such as
+`radio`, `string` and `photogrid` mapped, the declared `type` kept), a `maxLength` for text, and
+tables have parsed `columns` (`key`, `kind`, `label`, `options`, `expression`, `precision`) with the
+columns declared inside them folded in. Consumers read `fields` and never parse options themselves.
+
+### 8.2 Errors and warnings
+A template that cannot be used fails with `{"error", "code", "params"}`: `invalid_field_name`
+(`name`, `tag`), `invalid_show_if` (`field`, `detail`), `invalid_pattern` (`field`), `syntax`
+(`detail`: Go template syntax that could never render), `invalid` (`detail`). Warnings come back with
+the compiled template: `missing_label` (`field`), `show_if_unknown_field` (`field`, `name`).
+
+`prepare` checks a document's answers and returns them cleaned, with formula and row-number cells
+computed and hidden fields dropped, plus a list of `{"key", "code", "params"}`: `invalid`,
+`too_long` (`count`), `not_a_number`, `invalid_date`, `not_an_option`, `too_many_files` (`count`),
+`too_many_rows` (`count`), `blank`, `too_small` (`count`), `too_large` (`count`). File answers are
+returned as sent: what a reference may point to is the consumer's rule.
+
+### 8.3 Versions
+`rebc version` and `__rebVersion()` give the engine version; `compile` returns it as
+`engineVersion`, so a consumer can record which engine compiled each template version.
+

@@ -1,0 +1,5 @@
+GOVER_VERSION_FILE=version.go
+GOVER_PACKAGE_NAME=reb
+GOVER_LOCAL_VERSION=true
+GOVER_TAG_COMMAND=git tag -a {{ .Version }} -m "reb {{ .Version }}"
+COMMIT_COMMAND=git commit {{ .File }} -m "chore: bump to {{ .Version }}"

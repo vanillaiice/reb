@@ -130,7 +130,28 @@ func formatMoney(a, b, c any) string {
 
 // CompileHTML parses the raw template HTML markup and executes it with the provided custom context data, returning the final output string.
 func CompileHTML(htmlContent string, data any) (string, error) {
-	tmpl, err := template.New("dynamic_form").Funcs(template.FuncMap{
+	tmpl, err := parse(htmlContent)
+	if err != nil {
+		return "", err
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return "", err
+	}
+
+	return buf.String(), nil
+}
+
+// Check parses a compiled template without executing it: the syntax errors ({{if}} without {{end}},
+// an unknown function) that would make every render fail.
+func Check(htmlContent string) error {
+	_, err := parse(htmlContent)
+	return err
+}
+
+func parse(htmlContent string) (*template.Template, error) {
+	return template.New("dynamic_form").Funcs(template.FuncMap{
 		"now": func() time.Time {
 			return time.Now()
 		},
@@ -223,14 +244,4 @@ func CompileHTML(htmlContent string, data any) (string, error) {
 			return t.Format(layout)
 		},
 	}).Parse(htmlContent)
-	if err != nil {
-		return "", err
-	}
-
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
-		return "", err
-	}
-
-	return buf.String(), nil
 }

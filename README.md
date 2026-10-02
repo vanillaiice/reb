@@ -16,13 +16,15 @@ as a version. Consumers then move to that version. The format is described in
 ## Layout
 
 ```
-rebcompiler/      .reb source -> field schema (JSON) + Go html/template
+rebcompiler/      .reb source -> raw field schema (JSON) + Go html/template
 rebrender/        executes a compiled template against data (math, formatNumber, formatMoney, formatDate ...)
-cmd/rebc/         the JSON CLI: rebc compile | rebc render
+rebdoc/           what consumers need around it: Compile (normalized schema, coded errors, warnings),
+                  Prepare (answer validation, formulas, required/min/max/pattern, show-if),
+                  BuildContext (system values, file names, text-area paragraphs), sample answers
+cmd/rebc/         the JSON CLI
 cmd/wasm/         WebAssembly entry point for browsers (Studio, editor previews)
-assets/           tailwindcss.js, the Tailwind browser build that <reb-tailwind> loads, and
-                  paged.polyfill.js (paged.js 0.4.3, MIT), which paginates rendered HTML in a
-                  browser (previews, printing) with the same @page rules and repeated footer as the PDF
+assets/           tailwindcss.js (the Tailwind browser build <reb-tailwind> loads) and paged.polyfill.js
+testdata/         golden cases every consumer runs: formula_cases.json, show_if_cases.json
 docs/             the .reb specification
 ```
 
@@ -31,18 +33,21 @@ docs/             the .reb specification
 Input always arrives as one JSON object on stdin, never as arguments.
 
 ```
-rebc compile   stdin  {"reb": "<.reb source>"}
-               stdout {"schema": [...], "html": "<compiled Go template>"}
+rebc compile    {"reb"}                                  -> {"schema", "fields", "html", "engineVersion", "warnings"}
+rebc prepare    {"fields" | "schema", "answers"}         -> {"answers", "errors"}
+rebc render     {"html", "system", "answers", "assets", "fields"?}  -> {"html"}
+rebc normalize  {"schema"}                               -> {"schemaVersion", "fields"}
+rebc version                                             -> {"version"}
 
-rebc render    stdin  {"html": "...", "system": {...}, "answers": {...}, "assets": {"blob:<id>": "<file name>"}}
-               stdout {"html": "<rendered HTML>"}
-
-errors         exit status 1, stdout {"error": "..."}
+errors          exit status 1, stdout {"error", "code"?, "params"?}
 ```
 
-`render` replaces asset references in the answers (also inside table rows) with the given
-file names, flattens the answers into the template root without overriding system keys,
-and sanitizes plain strings with bluemonday's UGC policy before executing the template.
+`schema` is the raw schema the tags declared, `fields` the normalized one (specification section 8).
+`prepare` cleans a document's answers, computes formula and row-number cells, drops fields hidden by
+`show-if` and returns coded errors. `render` replaces file references in the answers (also inside
+table rows) with the given file names, turns text areas into paragraphs when `fields` is given,
+flattens the answers into the template root without overriding system values, and sanitizes plain
+strings with bluemonday's UGC policy before executing the template.
 
 ## Build and test
 
