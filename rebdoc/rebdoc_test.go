@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/vanillaiice/reb/rebcompiler"
+	"github.com/vanillaiice/reb/rebrender"
 )
 
 func raw(t *testing.T, text string) []rebcompiler.RebFieldSchema {
@@ -251,5 +252,30 @@ func TestSampleAnswersComputeFormulasAndUseDefaults(t *testing.T) {
 	rows := answers["items"].([]any)
 	if first := rows[0].(map[string]any); first["qty"] != "5" || first["rate"] != "10" || first["total"] != "50.0" {
 		t.Errorf("first row = %v", first)
+	}
+}
+
+func TestSampleImagesRenderInSrcAttributes(t *testing.T) {
+	compiled, err := Compile(`<reb-signature name="sig" label="Signature"></reb-signature>
+		<reb-photogrid name="photos" label="Photos"></reb-photogrid>
+		<reb-table name="rows" label="Rows" options="photo:photo"><table><tr reb-row><td><img src="{{.photo}}"></td></tr></table></reb-table>
+		<img src="{{.OrganizationLogo}}">`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	html, err := rebrender.CompileHTML(compiled.HTML, BuildContext(SampleSystem(), SampleAnswers(compiled.Fields), nil, &compiled.Fields))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(html, "ZgotmplZ") {
+		t.Errorf("a sample image was filtered out:\n%s", html)
+	}
+	if got := strings.Count(html, `src="data:image/svg`); got != 6 { // signature, two photos, two row photos, logo
+		t.Errorf("%d sample images, want 6:\n%s", got, html)
+	}
+	var decoded string
+	encoded, _ := json.Marshal(SampleAnswers(compiled.Fields)["sig"])
+	if err := json.Unmarshal(encoded, &decoded); err != nil || decoded != PlaceholderImage {
+		t.Errorf("sample signature encodes as %s", encoded)
 	}
 }

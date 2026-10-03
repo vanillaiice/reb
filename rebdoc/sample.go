@@ -6,6 +6,7 @@
 package rebdoc
 
 import (
+	"html/template"
 	"strings"
 	"time"
 )
@@ -16,6 +17,11 @@ const PlaceholderImage = "data:image/svg+xml;utf8," +
 	"<rect width='100%25' height='100%25' fill='%23e2e8f0'/>" +
 	"<text x='50%25' y='50%25' fill='%2394a3b8' font-family='sans-serif' font-size='14' " +
 	"text-anchor='middle' dominant-baseline='middle'>Sample</text></svg>"
+
+// placeholder is PlaceholderImage as a value html/template accepts in a src attribute: a data: URL
+// passed as a plain string is replaced by "#ZgotmplZ", which drew a broken image in every preview.
+// It encodes to JSON as the same string.
+var placeholder = template.URL(PlaceholderImage)
 
 // SampleAnswers makes representative answers for a preview, so bindings, formulas and totals render
 // real output instead of blanks: two table rows with numbers that make the totals non-zero, formula
@@ -36,7 +42,7 @@ func SampleSystem() map[string]any {
 		"ID": "00000000-0000-0000-0000-000000000000", "Name": "Sample document", "Number": 1, "Reference": "D-1",
 		"ProjectName": "Sample project", "ReporterName": "Sample author", "TemplateName": "Sample template",
 		"CreatedAt": time.Now().Format(time.RFC3339), "OrganizationName": "Sample organization",
-		"OrganizationLogo": PlaceholderImage, "Attachments": []any{}, "Photos": []any{},
+		"OrganizationLogo": placeholder, "Attachments": []any{}, "Photos": []any{},
 	}
 }
 
@@ -57,9 +63,9 @@ func sampleValue(field Field) any {
 	case KindCheckbox:
 		return true
 	case KindSignature:
-		return PlaceholderImage
+		return placeholder
 	case KindImages:
-		return []any{PlaceholderImage, PlaceholderImage}
+		return []any{placeholder, placeholder}
 	case KindTextarea:
 		return "Sample paragraph text rendered for preview."
 	case KindTable:
@@ -102,7 +108,7 @@ func sampleRows(columns []Column) []any {
 					row[column.Key] = column.Options[0]
 				}
 			case ColumnImage, ColumnSignature:
-				row[column.Key] = PlaceholderImage
+				row[column.Key] = placeholder
 			case ColumnFormula, ColumnAutoincrement:
 				row[column.Key] = nil
 			default:
