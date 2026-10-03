@@ -113,3 +113,13 @@ func TestCompileRebRowWithAttributes(t *testing.T) {
 		t.Errorf("got %q, want it to contain %q", out, want)
 	}
 }
+
+func TestQuotesInActionsOverSeveralLines(t *testing.T) {
+	_, html, err := Compile("<reb-table name=\"items\" label=\"Items\" options=\"amount:number\">\n<p>Total: {{sumColumn .items \"amount\"\n  | formatMoney \"QAR\" 2}}</p>\n</reb-table>")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(html, "{{sumColumn .items \"amount\"\n  | formatMoney \"QAR\" 2}}") {
+		t.Errorf("quotes stay escaped in a multi-line action:\n%s", html)
+	}
+}

@@ -357,8 +357,9 @@ func Compile(rawHTML string) (json.RawMessage, string, error) {
 	outHTML = re2.ReplaceAllString(outHTML, "{{$1}}")
 
 	// Fix html.Parse escaping quotes inside Go template directives in text nodes
-	// {{if eq .severity &#34;C&#34;}} becomes {{if eq .severity "C"}}
-	re3 := regexp.MustCompile(`\{\{.*?\}\}`)
+	// {{if eq .severity &#34;C&#34;}} becomes {{if eq .severity "C"}}, also in an action written over
+	// several lines ({{sumColumn .rows "amount"\n  | formatMoney "QAR" 2}}).
+	re3 := regexp.MustCompile(`(?s)\{\{.*?\}\}`)
 	outHTML = re3.ReplaceAllStringFunc(outHTML, func(match string) string {
 		return html.UnescapeString(match)
 	})
