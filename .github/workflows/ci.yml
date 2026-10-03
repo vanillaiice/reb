@@ -25,16 +25,3 @@ jobs:
         run: |
           CGO_ENABLED=0 go build -trimpath -o rebc ./cmd/rebc
           GOOS=js GOARCH=wasm go build -trimpath -ldflags="-s -w" -o rebcompiler.wasm ./cmd/wasm
-
-  # TinyGo would shrink the WebAssembly build about 4x, but 0.42 cannot run html/template
-  # (reflect.Type.NumOut is unimplemented). This job reports when that changes; it never blocks.
-  tinygo:
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    container: tinygo/tinygo:latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Test under TinyGo
-        run: tinygo test ./rebcompiler ./rebrender
-      - name: Build the WebAssembly engine with TinyGo
-        run: tinygo build -target wasm -no-debug -opt=z -o rebcompiler-tinygo.wasm ./cmd/wasm

@@ -66,7 +66,7 @@ cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" .   # the loader the .wasm needs
 
 The WebAssembly build is about 8 MB (2.1 MB gzipped). TinyGo would make it about 4 times
 smaller, but TinyGo 0.42 cannot run `html/template` (`reflect.Type.NumOut` is not
-implemented), so CI tries it on every push without blocking.
+implemented).
 
 ## Browser pagination
 
