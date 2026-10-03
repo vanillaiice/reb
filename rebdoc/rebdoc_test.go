@@ -279,3 +279,45 @@ func TestSampleImagesRenderInSrcAttributes(t *testing.T) {
 		t.Errorf("sample signature encodes as %s", encoded)
 	}
 }
+
+func warningCodes(t *testing.T, source string) []string {
+	t.Helper()
+	compiled, err := Compile(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var codes []string
+	for _, w := range compiled.Warnings {
+		codes = append(codes, w.Code+":"+w.Params["field"]+w.Params["name"]+"@"+w.Params["table"])
+	}
+	return codes
+}
+
+func TestLintReportsUnknownBindingsUnusedAndConflictingFields(t *testing.T) {
+	got := warningCodes(t, `<p>{{.Reference}} {{.clinet}}</p>
+		<reb-declare name="kept" label="Kept"></reb-declare>
+		<reb-declare name="unused" label="Unused"></reb-declare>{{if .kept}}x{{end}}
+		<reb-text name="dup" label="Dup"></reb-text><reb-number name="dup" label="Dup"></reb-number>
+		<reb-table name="rows" label="Rows" options="qty:number"><table><tr reb-row><td>{{.qty}} {{.qtty}}</td></tr></table></reb-table>`)
+	want := []string{"unknown_binding:clinet@", "unknown_binding:qtty@rows", "unused_field:unused@", "duplicate_field:dup@"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("warnings = %v, want %v", got, want)
+	}
+}
+
+func TestLintAcceptsWhatTemplatesDo(t *testing.T) {
+	got := warningCodes(t, `<reb-tailwind></reb-tailwind>
+		<p>{{.Name}} {{now | formatDate "02/01/2006"}} {{formatDate "2006" .CreatedAt}} {{.Answers.site}}</p>
+		<reb-text name="site" label="Site"></reb-text><reb-text name="site" label="Site again"></reb-text>
+		<reb-photogrid name="photos" label="Photos"></reb-photogrid>
+		<reb-signature name="sig" label="Signature"></reb-signature>
+		<reb-declare name="gate" label="Gate" type="checkbox"></reb-declare>
+		<reb-declare name="detail" label="Detail" show-if="gate"></reb-declare>{{.detail}}
+		<reb-table name="items" label="Items" options="qty:number,rate:number,amount:formula[qty*rate|2]">
+		<table><tr reb-row><td>{{.qty}} {{.amount}} {{$.site}}</td></tr></table>
+		<p>{{sumColumn .items "amount" | formatMoney "QAR" 2}}</p></reb-table>
+		{{with .site}}{{.anything}}{{end}}{{range .photos}}<img src="{{.}}">{{end}}`)
+	if len(got) != 0 {
+		t.Errorf("warnings = %v, want none", got)
+	}
+}

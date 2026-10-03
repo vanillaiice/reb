@@ -357,7 +357,18 @@ columns declared inside them folded in. Consumers read `fields` and never parse 
 A template that cannot be used fails with `{"error", "code", "params"}`: `invalid_field_name`
 (`name`, `tag`), `invalid_show_if` (`field`, `detail`), `invalid_pattern` (`field`), `syntax`
 (`detail`: Go template syntax that could never render), `invalid` (`detail`). Warnings come back with
-the compiled template: `missing_label` (`field`), `show_if_unknown_field` (`field`, `name`).
+the compiled template:
+
+* `missing_label` (`field`): a field without a label.
+* `show_if_unknown_field` (`field`, `name`): a show-if condition reading a field the template does not
+  declare.
+* `unknown_binding` (`name`, and `table` inside a table's rows): the template prints `{{.name}}` but
+  no field, system value (section 5.1) or, inside the rows, column has that name. Usually a typo.
+* `unused_field` (`field`): a field the form asks for that the template never prints, tests
+  (`{{if}}`) or reads in a show-if.
+* `duplicate_field` (`field`): one name declared as fields of different kinds; only the first
+  declaration counts. Declaring the same field twice as the same kind is fine (it prints the answer
+  twice).
 
 `prepare` checks a document's answers and returns them cleaned, with formula and row-number cells
 computed and hidden fields dropped, plus a list of `{"key", "code", "params"}`: `invalid`,

@@ -44,6 +44,9 @@ func (e *Error) Error() string { return e.Message }
 //
 //	missing_label          a field without a label {field}
 //	show_if_unknown_field  a show-if condition reading a field the template does not declare {field, name}
+//	unknown_binding        {{.name}} that no field, system value or table column names {name, table?}
+//	unused_field           a field the template never prints, tests or reads in a show-if {field}
+//	duplicate_field        one name declared as fields of different kinds {field}
 type Warning struct {
 	Code    string            `json:"code"`
 	Params  map[string]string `json:"params,omitempty"`
@@ -105,5 +108,6 @@ func Compile(source string) (*Compiled, error) {
 				Message: field.Key + " has no label"})
 		}
 	}
+	compiled.Warnings = append(compiled.Warnings, lint(source, html, fields)...)
 	return compiled, nil
 }

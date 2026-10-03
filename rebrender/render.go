@@ -16,6 +16,7 @@ import (
 	"html/template"
 	"strconv"
 	"strings"
+	tparse "text/template/parse"
 	"time"
 )
 
@@ -141,6 +142,16 @@ func CompileHTML(htmlContent string, data any) (string, error) {
 	}
 
 	return buf.String(), nil
+}
+
+// Tree parses a compiled template without executing it and returns its parse tree, for checks that
+// read what a template prints (rebdoc's lint).
+func Tree(htmlContent string) (*tparse.Tree, error) {
+	t, err := parse(htmlContent)
+	if err != nil {
+		return nil, err
+	}
+	return t.Tree, nil
 }
 
 // Check parses a compiled template without executing it: the syntax errors ({{if}} without {{end}},
