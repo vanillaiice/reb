@@ -14,7 +14,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/vanillaiice/reb/rebcompiler"
+	"github.com/vanillaiice/reb/internal/rebcompiler"
 )
 
 // SchemaVersion is the version of the normalized schema below. The raw schema the compiler emits
@@ -102,6 +102,25 @@ type Column struct {
 	Options    []string `json:"options,omitempty"`
 	Expression string   `json:"expression,omitempty"`
 	Precision  *int     `json:"precision,omitempty"`
+}
+
+// SchemaInput is how rebc and the WebAssembly build receive a schema: the normalized one ("fields")
+// or the raw one the compiler emits ("schema").
+type SchemaInput struct {
+	Fields *Schema                      `json:"fields"`
+	Schema []rebcompiler.RebFieldSchema `json:"schema"`
+}
+
+// Resolve is the normalized schema given, else the raw one normalized, else nil.
+func (s SchemaInput) Resolve() *Schema {
+	if s.Fields != nil {
+		return s.Fields
+	}
+	if s.Schema != nil {
+		normalized := Normalize(s.Schema)
+		return &normalized
+	}
+	return nil
 }
 
 // Stored reports whether the field has an answer (sections do not).

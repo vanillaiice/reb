@@ -55,7 +55,13 @@ func TestPrepareAndRender(t *testing.T) {
 	}
 
 	rendered := decodeResult(t, render(`{"html": "{{.site}} {{.Name}}", "system": {"Name": "R1"}, "answers": {"site": "<b>North</b><script>x</script>"}}`))
-	if rendered["html"] != "<b>North</b> R1" {
+	if rendered["html"] != "&lt;b&gt;North&lt;/b&gt;&lt;script&gt;x&lt;/script&gt; R1" {
 		t.Errorf("html = %v", rendered["html"])
+	}
+
+	// Like rebc, prepare also takes the raw schema.
+	prepared = decodeResult(t, prepare(`{"schema": [{"key": "n", "type": "number"}], "answers": {"n": "x"}}`))
+	if errors := prepared["errors"].([]any); len(errors) != 1 || errors[0].(map[string]any)["code"] != "not_a_number" {
+		t.Errorf("prepare with a raw schema: %v", prepared)
 	}
 }

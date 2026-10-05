@@ -12,7 +12,7 @@ import (
 
 	"golang.org/x/net/html"
 
-	"github.com/vanillaiice/reb/rebrender"
+	"github.com/vanillaiice/reb/internal/rebrender"
 )
 
 // SystemValues are the names a consumer passes besides the answers (specification section 5.1).
@@ -149,16 +149,24 @@ func (l *linter) pipe(pipe *parse.PipeNode, s scope) {
 func (l *linter) arg(node parse.Node, s scope) {
 	switch n := node.(type) {
 	case *parse.FieldNode:
-		l.name(n.Ident[0], s)
+		l.field(n.Ident, s)
 	case *parse.ChainNode:
 		l.arg(n.Node, s)
 	case *parse.VariableNode:
 		// $.name reads the root whatever the dot holds.
 		if len(n.Ident) > 1 && n.Ident[0] == "$" {
-			l.name(n.Ident[1], scope{})
+			l.field(n.Ident[1:], scope{})
 		}
 	case *parse.PipeNode:
 		l.pipe(n, s)
+	}
+}
+
+// field checks .a.b...: at the root, .Answers.name reads the answer name.
+func (l *linter) field(idents []string, s scope) {
+	l.name(idents[0], s)
+	if len(idents) > 1 && idents[0] == "Answers" && s == (scope{}) {
+		l.name(idents[1], s)
 	}
 }
 

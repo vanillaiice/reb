@@ -9,7 +9,7 @@
 //
 //	rebc compile    {"reb"}                                            -> {"schema", "fields", "html", "engineVersion", "warnings"}
 //	rebc prepare    {"fields" | "schema", "answers"}                   -> {"answers", "errors"}
-//	rebc render     {"html", "system", "answers", "assets", "fields"?} -> {"html"}
+//	rebc render     {"html", "system", "answers", "assets", "fields"? | "schema"?} -> {"html"}
 //	rebc normalize  {"schema"}                                         -> {"schemaVersion", "fields"}
 //	rebc version                                                       -> {"version"}
 //
@@ -26,9 +26,9 @@ import (
 	"os"
 
 	"github.com/vanillaiice/reb"
-	"github.com/vanillaiice/reb/rebcompiler"
-	"github.com/vanillaiice/reb/rebdoc"
-	"github.com/vanillaiice/reb/rebrender"
+	"github.com/vanillaiice/reb/internal/rebcompiler"
+	"github.com/vanillaiice/reb/internal/rebdoc"
+	"github.com/vanillaiice/reb/internal/rebrender"
 )
 
 // maxInput bounds what rebc reads, so a runaway caller cannot exhaust memory.
@@ -56,15 +56,19 @@ func main() {
 }
 
 func fail(err error) {
-	var coded *rebdoc.Error
-	var out []byte
-	if errors.As(err, &coded) {
-		out, _ = json.Marshal(coded)
-	} else {
-		out, _ = json.Marshal(map[string]string{"error": err.Error()})
-	}
-	os.Stdout.Write(out)
+	os.Stdout.Write(errorJSON(err))
 	os.Exit(1)
+}
+
+// errorJSON is what rebc prints on failure: {"error", "code"?, "params"?}.
+func errorJSON(err error) []byte {
+	var coded *rebdoc.Error
+	if errors.As(err, &coded) {
+		out, _ := json.Marshal(coded)
+		return out
+	}
+	out, _ := json.Marshal(map[string]string{"error": err.Error()})
+	return out
 }
 
 func run(command string, input []byte) ([]byte, error) {
@@ -105,32 +109,15 @@ func compile(input []byte) ([]byte, error) {
 	return json.Marshal(compiled)
 }
 
-// schemaInput accepts the normalized schema ("fields") or the raw one ("schema").
-type schemaInput struct {
-	Fields *rebdoc.Schema               `json:"fields"`
-	Schema []rebcompiler.RebFieldSchema `json:"schema"`
-}
-
-func (s schemaInput) resolve() *rebdoc.Schema {
-	if s.Fields != nil {
-		return s.Fields
-	}
-	if s.Schema != nil {
-		normalized := rebdoc.Normalize(s.Schema)
-		return &normalized
-	}
-	return nil
-}
-
 func prepare(input []byte) ([]byte, error) {
 	var in struct {
-		schemaInput
+		rebdoc.SchemaInput
 		Answers map[string]any `json:"answers"`
 	}
 	if err := decode(input, &in); err != nil {
 		return nil, err
 	}
-	schema := in.resolve()
+	schema := in.Resolve()
 	if schema == nil {
 		return nil, errors.New("prepare needs fields or schema")
 	}
@@ -139,7 +126,7 @@ func prepare(input []byte) ([]byte, error) {
 
 func render(input []byte) ([]byte, error) {
 	var in struct {
-		schemaInput
+		rebdoc.SchemaInput
 		HTML    string            `json:"html"`
 		System  map[string]any    `json:"system"`
 		Answers map[string]any    `json:"answers"`
@@ -148,7 +135,7 @@ func render(input []byte) ([]byte, error) {
 	if err := decode(input, &in); err != nil {
 		return nil, err
 	}
-	html, err := rebrender.CompileHTML(in.HTML, rebdoc.BuildContext(in.System, in.Answers, in.Assets, in.resolve()))
+	html, err := rebrender.CompileHTML(in.HTML, rebdoc.BuildContext(in.System, in.Answers, in.Assets, in.Resolve()))
 	if err != nil {
 		return nil, err
 	}

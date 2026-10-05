@@ -1,10 +1,10 @@
 module github.com/vanillaiice/reb
 
-go 1.26.2
+go 1.26.0
 
 require (
 	github.com/microcosm-cc/bluemonday v1.0.27
-	golang.org/x/net v0.54.0
+	golang.org/x/net v0.59.0
 )
 
 require (

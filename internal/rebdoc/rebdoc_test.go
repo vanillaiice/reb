@@ -13,8 +13,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vanillaiice/reb/rebcompiler"
-	"github.com/vanillaiice/reb/rebrender"
+	"github.com/vanillaiice/reb/internal/rebcompiler"
+	"github.com/vanillaiice/reb/internal/rebrender"
 )
 
 func raw(t *testing.T, text string) []rebcompiler.RebFieldSchema {
@@ -202,8 +202,25 @@ func TestBuildContextTurnsTextAreasIntoParagraphs(t *testing.T) {
 	if got := context["notes"].(template.HTML); got != "<p>a<br>b</p><p>c</p>" {
 		t.Errorf("notes = %q", got)
 	}
-	if got := context["site"].(template.HTML); got != "x\ny" {
+	if got := context["site"].(string); got != "x\ny" {
 		t.Errorf("a text field stays as typed: %q", got)
+	}
+	if got := context["Answers"].(map[string]any)["notes"]; got != context["notes"] {
+		t.Errorf(".Answers holds the same paragraphs: %q", got)
+	}
+}
+
+func TestBuildContextLeavesItsInputAlone(t *testing.T) {
+	schema := schemaFrom(t, `<reb-textarea name="notes" label="Notes"></reb-textarea>`)
+	answers := map[string]any{"notes": "a\nb", "sig": "ref1", "photos": []any{"ref2"}, "rows": []any{map[string]any{"p": "ref3"}}}
+	context := BuildContext(nil, answers, map[string]string{"ref1": "1.png", "ref2": "2.png", "ref3": "3.png"}, &schema)
+
+	want := map[string]any{"notes": "a\nb", "sig": "ref1", "photos": []any{"ref2"}, "rows": []any{map[string]any{"p": "ref3"}}}
+	if !reflect.DeepEqual(answers, want) {
+		t.Errorf("answers changed: %v", answers)
+	}
+	if context["sig"] != "1.png" || context["photos"].([]any)[0] != "2.png" || context["rows"].([]any)[0].(map[string]any)["p"] != "3.png" {
+		t.Errorf("file references not replaced: %v", context)
 	}
 }
 
@@ -319,5 +336,42 @@ func TestLintAcceptsWhatTemplatesDo(t *testing.T) {
 		{{with .site}}{{.anything}}{{end}}{{range .photos}}<img src="{{.}}">{{end}}`)
 	if len(got) != 0 {
 		t.Errorf("warnings = %v, want none", got)
+	}
+}
+
+func TestAnswersFieldCountsAsUsed(t *testing.T) {
+	compiled, err := Compile(`<reb-declare name="a" label="A"></reb-declare><p>{{.Answers.a}} {{$.Answers.typo}}</p>`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var codes []string
+	for _, warning := range compiled.Warnings {
+		codes = append(codes, warning.Code+":"+warning.Params["field"]+warning.Params["name"])
+	}
+	if !reflect.DeepEqual(codes, []string{"unknown_binding:typo"}) {
+		t.Errorf("warnings = %v", codes)
+	}
+}
+
+func TestPreviewFormatsTheDocumentNumber(t *testing.T) {
+	out, err := rebrender.CompileHTML(`{{formatNumber .Number 2}}`, SampleSystem())
+	if err != nil || out != "1.00" {
+		t.Errorf("got %q, %v", out, err)
+	}
+}
+
+func TestPrepareNamesTheCellOfAnError(t *testing.T) {
+	schema := schemaFrom(t, `<reb-table name="items" label="Items" options="qty:number,note:text"></reb-table>`)
+	prepared := Prepare(schema, map[string]any{"items": []any{
+		map[string]any{"qty": "1"},
+		map[string]any{"qty": "x", "note": strings.Repeat("a", TextLimit+1)},
+	}})
+
+	want := []FieldError{
+		{Key: "items", Code: "not_a_number", Params: map[string]any{"row": 1, "column": "qty"}},
+		{Key: "items", Code: "too_long", Params: map[string]any{"row": 1, "column": "note", "count": TextLimit}},
+	}
+	if !reflect.DeepEqual(prepared.Errors, want) {
+		t.Errorf("errors = %+v", prepared.Errors)
 	}
 }

@@ -10,11 +10,10 @@ import (
 	"html/template"
 	"regexp"
 	"strings"
-
-	"github.com/microcosm-cc/bluemonday"
 )
 
-// BuildContext is the data a compiled template executes against (spec section 5):
+// BuildContext is the data a compiled template executes against (spec section 5). It does not
+// change the maps it is given.
 //
 //   - file references in the answers (top level, in lists and in table rows) are replaced by the
 //     names the renderer receives the files under (assets: reference -> file name);
@@ -22,68 +21,61 @@ import (
 //     single line breaks become <br>, and the text is escaped (text areas hold plain text);
 //   - the answers are flattened into the root without overriding system values, and stay
 //     available as .Answers;
-//   - plain strings are sanitized with bluemonday's UGC policy and passed as HTML, while replaced
-//     file references stay plain strings so templates can use them in src attributes.
+//   - every other answer stays as it is: text is plain text, escaped where the template prints it,
+//     so {{if eq .dept "R&D"}} compares what was typed.
 func BuildContext(system, answers map[string]any, assets map[string]string, schema *Schema) map[string]any {
-	if answers == nil {
-		answers = map[string]any{}
+	values := make(map[string]any, len(answers))
+	for key, value := range answers {
+		values[key] = withAssets(value, assets)
 	}
 	if schema != nil {
 		for _, field := range schema.Fields {
-			if s, ok := answers[field.Key].(string); ok && field.Kind == KindTextarea {
-				answers[field.Key] = Paragraphs(s)
+			if s, ok := values[field.Key].(string); ok && field.Kind == KindTextarea {
+				values[field.Key] = template.HTML(Paragraphs(s))
 			}
 		}
 	}
 
-	isAsset := map[string]bool{}
-	for key, value := range answers {
-		switch val := value.(type) {
-		case string:
-			if name, ok := assets[val]; ok {
-				answers[key] = name
-				isAsset[key] = true
-			}
-		case []any:
-			for i, item := range val {
-				switch it := item.(type) {
-				case string:
-					if name, ok := assets[it]; ok {
-						val[i] = name
-					}
-				case map[string]any:
-					for column, cell := range it {
-						if s, ok := cell.(string); ok {
-							if name, ok := assets[s]; ok {
-								it[column] = name
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	context := make(map[string]any, len(system)+len(answers)+1)
+	context := make(map[string]any, len(system)+len(values)+1)
 	for key, value := range system {
 		context[key] = value
 	}
 	if _, exists := context["Answers"]; !exists {
-		context["Answers"] = answers
+		context["Answers"] = values
 	}
-
-	sanitizer := bluemonday.UGCPolicy()
-	for key, value := range answers {
-		if _, exists := context[key]; exists {
-			continue
-		}
-		if s, ok := value.(string); ok && !isAsset[key] {
-			context[key] = template.HTML(sanitizer.Sanitize(s))
-		} else {
+	for key, value := range values {
+		if _, exists := context[key]; !exists {
 			context[key] = value
 		}
 	}
 	return context
+}
+
+// withAssets is an answer with its file references replaced by file names, copied where it changes.
+func withAssets(value any, assets map[string]string) any {
+	switch v := value.(type) {
+	case string:
+		if name, ok := assets[v]; ok {
+			return name
+		}
+	case []any:
+		list := make([]any, len(v))
+		for i, item := range v {
+			list[i] = withAssets(item, assets)
+		}
+		return list
+	case map[string]any: // a table row
+		row := make(map[string]any, len(v))
+		for column, cell := range v {
+			if s, ok := cell.(string); ok {
+				row[column] = withAssets(s, assets)
+			} else {
+				row[column] = cell
+			}
+		}
+		return row
+	}
+	return value
 }
 
 var paragraphBreak = regexp.MustCompile(`\r?\n\s*\r?\n`)

@@ -8,13 +8,14 @@ package rebdoc
 import (
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 )
 
-// testdata/formula_cases.json was produced under Node from the Rebar mobile and web evaluators; every
-// consumer's evaluator runs it (Rebar's app/javascript/reb/formula.js in its CI).
+// testdata/formula_cases.json defines table formulas; every evaluator runs it (Rebar's
+// app/javascript/reb/formula.js in its CI, the mobile app's utils/formula.ts).
 func TestFormulaGoldenCases(t *testing.T) {
-	raw, err := os.ReadFile("../testdata/formula_cases.json")
+	raw, err := os.ReadFile("../../testdata/formula_cases.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +48,9 @@ func TestFormulaEdges(t *testing.T) {
 		{"(a+b", map[string]any{"a": "1", "b": "2"}, 2, "0.00"},
 		{"a*b", map[string]any{"a": 2.5, "b": true}, 1, "0.0"},
 		{"a", map[string]any{"a": "-0.001"}, 2, "-0.00"},
-		{"a", map[string]any{"a": "0.0000001"}, 2, "3.00"}, // "1e-7" becomes "10-7" once names turn to 0, as in JavaScript
+		{"a*2", map[string]any{"a": "0.0000001"}, 7, "0.0000002"},                      // values are not written into the expression as text
+		{"-" + strings.Repeat("(", 100) + "1" + strings.Repeat(")", 100), nil, 0, "0"}, // too deep
+		{strings.Repeat("-", 100) + "1", nil, 0, "0"},
 	} {
 		if got := Formula(c.expression, c.row, c.precision); got != c.want {
 			t.Errorf("Formula(%q, %v) = %q, want %q", c.expression, c.row, got, c.want)

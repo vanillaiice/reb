@@ -16,7 +16,8 @@ import (
 )
 
 // FieldError is a refused answer: Key is the field, Code names the reason and Params fill the
-// message, so each consumer words it in its own language.
+// message, so each consumer words it in its own language. An error in a table cell also has the
+// params row (from 0, in the rows Prepare returns) and column (its key).
 //
 //	invalid           not in the expected form (also a text not matching its pattern)
 //	too_long          longer than {count} characters
@@ -253,7 +254,7 @@ func (p *preparer) rows(field Field, value any) []any {
 		row, _ := item.(map[string]any)
 		cells := map[string]any{}
 		for _, column := range field.Columns {
-			cells[column.Key] = p.cell(field.Key, column, row[column.Key])
+			cells[column.Key] = p.cell(field.Key, index, column, row[column.Key])
 		}
 		for _, column := range field.Columns {
 			switch column.Kind {
@@ -272,7 +273,21 @@ func (p *preparer) rows(field Field, value any) []any {
 	return rows
 }
 
-func (p *preparer) cell(key string, column Column, value any) any {
+// cell cleans one typed cell; its errors carry the row (from 0, in the rows returned) and the column.
+func (p *preparer) cell(key string, row int, column Column, value any) any {
+	before := len(p.errors)
+	cleaned := p.cellValue(key, column, value)
+	for i := before; i < len(p.errors); i++ {
+		params := map[string]any{"row": row, "column": column.Key}
+		for name, param := range p.errors[i].Params {
+			params[name] = param
+		}
+		p.errors[i].Params = params
+	}
+	return cleaned
+}
+
+func (p *preparer) cellValue(key string, column Column, value any) any {
 	switch column.Kind {
 	case ColumnNumber:
 		return p.number(key, value)

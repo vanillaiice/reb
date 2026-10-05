@@ -1,7 +1,6 @@
 package rebcompiler
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -15,14 +14,9 @@ func TestCompile(t *testing.T) {
 		</div>
 	`
 
-	schemaBytes, finalHTML, err := Compile(rawHTML)
+	schema, finalHTML, err := Compile(rawHTML)
 	if err != nil {
 		t.Fatalf("failed to compile: %v", err)
-	}
-
-	var schema []RebFieldSchema
-	if err := json.Unmarshal(schemaBytes, &schema); err != nil {
-		t.Fatalf("failed to parse schema: %v", err)
 	}
 
 	if len(schema) != 2 {
@@ -53,13 +47,9 @@ func TestCompile(t *testing.T) {
 func TestCompileSelfClosingSiblings(t *testing.T) {
 	// HTML5 ignores "/>" on custom elements; the first tag used to swallow the
 	// second, dropping field b from the schema and the output.
-	schemaBytes, out, err := Compile(`<div><reb-text name="a" label="A" /> and <reb-text name="b" label="B" /></div>`)
+	schema, out, err := Compile(`<div><reb-text name="a" label="A" /> and <reb-text name="b" label="B" /></div>`)
 	if err != nil {
 		t.Fatalf("compile: %v", err)
-	}
-	var schema []RebFieldSchema
-	if err := json.Unmarshal(schemaBytes, &schema); err != nil {
-		t.Fatalf("schema: %v", err)
 	}
 	if len(schema) != 2 || schema[1].Key != "b" {
 		t.Fatalf("expected fields a and b, got %+v", schema)
@@ -82,12 +72,10 @@ func TestCompileKeepsLeadingStyle(t *testing.T) {
 }
 
 func TestCompileTrimsOptions(t *testing.T) {
-	schemaBytes, _, err := Compile(`<reb-select name="sev" label="Severity" options="High, Medium , Low,"></reb-select>`)
+	schema, _, err := Compile(`<reb-select name="sev" label="Severity" options="High, Medium , Low,"></reb-select>`)
 	if err != nil {
 		t.Fatalf("compile: %v", err)
 	}
-	var schema []RebFieldSchema
-	_ = json.Unmarshal(schemaBytes, &schema)
 	if got := strings.Join(schema[0].Options, "|"); got != "High|Medium|Low" {
 		t.Errorf("options = %q", got)
 	}
@@ -121,5 +109,22 @@ func TestQuotesInActionsOverSeveralLines(t *testing.T) {
 	}
 	if !strings.Contains(html, "{{sumColumn .items \"amount\"\n  | formatMoney \"QAR\" 2}}") {
 		t.Errorf("quotes stay escaped in a multi-line action:\n%s", html)
+	}
+}
+
+func TestCompileWithoutFieldsHasAnEmptySchema(t *testing.T) {
+	schema, _, err := Compile(`<p>no fields</p>`)
+	if err != nil || schema == nil || len(schema) != 0 {
+		t.Errorf("schema = %#v, err = %v", schema, err)
+	}
+}
+
+func TestBodyInAnAttributeIsNotABodyTag(t *testing.T) {
+	_, out, err := Compile(`<p title="<body>">x</p>`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out != `<p title="&lt;body&gt;">x</p>` {
+		t.Errorf("got %q", out)
 	}
 }

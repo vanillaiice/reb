@@ -1,0 +1,9 @@
+<span>{{.work_type}}</span>
+<span>{{.fire_watch}}</span>
+<span>{{.extinguisher}}</span>
+<span>{{.crew}}</span>
+<span>{{.start}}</span>
+<span>{{.permit_code}}</span>
+<div style="word-wrap:break-word;overflow-wrap:break-word;white-space:normal;">{{.remarks | safeHTML}}</div>
+<p>{{.work_type}} {{.fire_watch}} {{.extinguisher}} {{.crew}} {{formatDate "02/01/2006" .start}} {{.permit_code}}</p>
+<div>{{.remarks | safeHTML}}</div>

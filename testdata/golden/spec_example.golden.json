@@ -1,0 +1,78 @@
+{
+  "compile": {
+    "engineVersion": "(the engine version)",
+    "fields": {
+      "fields": [
+        {
+          "key": "permit_number",
+          "kind": "number",
+          "label": "Authorized Permit Number",
+          "type": "number"
+        },
+        {
+          "key": "clearance_type",
+          "kind": "select",
+          "label": "Operational Clearance Category",
+          "options": [
+            "Hot Work",
+            "Confined Space Entry",
+            "Electrical Isolation"
+          ],
+          "type": "select"
+        },
+        {
+          "key": "ppe_verified",
+          "kind": "text",
+          "label": "Protective Gears Inspected",
+          "maxLength": 10000,
+          "type": "text"
+        },
+        {
+          "key": "notes",
+          "kind": "textarea",
+          "label": "Site Supervisor Remarks",
+          "maxLength": 50000,
+          "type": "textarea"
+        }
+      ],
+      "schemaVersion": 2
+    },
+    "schema": [
+      {
+        "key": "permit_number",
+        "label": "Authorized Permit Number",
+        "type": "number"
+      },
+      {
+        "key": "clearance_type",
+        "label": "Operational Clearance Category",
+        "options": [
+          "Hot Work",
+          "Confined Space Entry",
+          "Electrical Isolation"
+        ],
+        "type": "select"
+      },
+      {
+        "key": "ppe_verified",
+        "label": "Protective Gears Inspected",
+        "type": "text"
+      },
+      {
+        "key": "notes",
+        "label": "Site Supervisor Remarks",
+        "type": "textarea"
+      }
+    ],
+    "warnings": []
+  },
+  "prepare": {
+    "answers": {
+      "clearance_type": "Confined Space Entry",
+      "notes": "Entry supervised.\nGas readings logged hourly.\n\nNo hot work nearby.",
+      "permit_number": "4471",
+      "ppe_verified": "Harness \u0026 gas detector"
+    },
+    "errors": []
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "code": "syntax",
+  "params": {
+    "detail": "1: unexpected EOF"
+  },
+  "error": "template syntax: 1: unexpected EOF"
+}

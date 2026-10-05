@@ -9,7 +9,7 @@ The `.reb` (Rebar Template Layout) format is a hybrid declarative markup structu
 
 A `.reb` template is compiled by the Go backend (and frontend editor) into:
 1. **JSON Schema Array**: Extracted from custom `<reb-*>` elements and used by the web client to render active forms dynamically.
-2. **Go Template HTML Structure**: Custom tags are transpiled into standard HTML with `{{.Answers...}}` data bindings used by the headless Chromium compiler (Gotenberg) to output high-fidelity vector PDFs.
+2. **Go Template HTML Structure**: Custom tags are transpiled into standard HTML with `{{.name}}` data bindings (answers sit at the root of the template data, section 5) used by the headless Chromium compiler (Gotenberg) to output high-fidelity vector PDFs.
 
 ---
 
@@ -22,7 +22,7 @@ graph TD
     A --> C[Presentation Style: &lt;style&gt;]
     A --> D[Custom Form Elements: &lt;reb-*&gt;]
     D --> E[Compiled to JSON Schema Array]
-    D --> F[Transpiled to Go {{.Answers.*}} Bindings]
+    D --> F[Transpiled to Go {{.name}} Bindings]
 ```
 
 ### Topology Details:
@@ -171,6 +171,11 @@ Supported column types:
 - `checkbox`: Boolean checkbox
 - `select[Option1|Option2|Option3]`: Dropdown select menu with options separated by `|`
 - `formula[expression|precision]`: Read-only computed field evaluated in real-time. Example: `formula[qty*rate|2]`.
+  The expression uses numbers, the row's column names, `+ - * /` (with the usual precedence, and `-`
+  or `+` before a value, as in `qty*-rate`) and parentheses. A column reads as its number (0 when
+  empty or not a number), any other name as 0; dividing by zero gives 0, and so does an expression
+  that does not parse. The result has `precision` decimals (2 when omitted, at most 10). The cases
+  in `testdata/formula_cases.json` define the behaviour.
 - `autoincrement`: Read-only field that automatically renders the current row's numeric index (1, 2, 3...).
 
 The backend PDF compiler allows you to design your table layout *manually*. You can write standard HTML `<table>` elements inside `<reb-table>`, and add the `reb-row` attribute to your row template `<tr>`. The compiler will automatically loop over the table data and repeat the `<tr>` block for each row entered by the user.
@@ -216,7 +221,7 @@ The PDF compiler registers custom Go template functions for complex layout formu
 - `{{formatNumber .val 2}}`: Forces floating point numbers to render with the specified number of decimal places.
 - `{{formatMoney .val "QAR" 2}}`: A number with thousands separators, the given decimals and the currency code (also `{{sumColumn .rows "total" | formatMoney "QAR" 2}}`).
 - `{{formatDate "02/01/2006" .day}}`: A date answer in Go's layout notation; `{{now | formatDate "02/01/2006"}}` prints today.
-- `{{safeHTML .value}}`: Prints a value as HTML (empty when missing).
+- `{{safeHTML .value}}`: Prints a value as HTML (empty when missing). Answer text is sanitized first (bluemonday's UGC policy: formatting and links stay, scripts, styles and event handlers go); a text area's paragraphs print as they are.
 
 **Example Grand Total:**
 ```html
@@ -259,7 +264,9 @@ Rebar Studio packs them into `.rebpack` files under `assets/`). File names use l
   usable in `src`.
 * Text areas hold plain text. They render as paragraphs: a blank line starts a new paragraph, a line
   break becomes `<br>`, and the text is escaped.
-* Other text answers are sanitized HTML (bluemonday's UGC policy).
+* Other answers are plain text: the template escapes them where it prints them, so `<b>` typed in a
+  text field prints as `<b>`, and comparisons such as `{{if eq .dept "R&D"}}` see what was typed.
+  `{{safeHTML .name}}` prints an answer as sanitized HTML instead.
 * Table rows are lists of objects keyed by column; formula and row-number cells are computed by the
   engine (`testdata/formula_cases.json`), whatever the form sent.
 
@@ -370,13 +377,40 @@ the compiled template:
   declaration counts. Declaring the same field twice as the same kind is fine (it prints the answer
   twice).
 
-`prepare` checks a document's answers and returns them cleaned, with formula and row-number cells
+`prepare` (given the normalized `fields` or the raw `schema`) checks a document's answers and returns them cleaned, with formula and row-number cells
 computed and hidden fields dropped, plus a list of `{"key", "code", "params"}`: `invalid`,
 `too_long` (`count`), `not_a_number`, `invalid_date`, `not_an_option`, `too_many_files` (`count`),
-`too_many_rows` (`count`), `blank`, `too_small` (`count`), `too_large` (`count`). File answers are
+`too_many_rows` (`count`), `blank`, `too_small` (`count`), `too_large` (`count`). An error in a table
+cell also carries `row` (from 0, in the returned rows) and `column` (the column's key). File answers are
 returned as sent: what a reference may point to is the consumer's rule.
 
 ### 8.3 Versions
 `rebc version` and `__rebVersion()` give the engine version; `compile` returns it as
 `engineVersion`, so a consumer can record which engine compiled each template version.
+
+### 8.4 Compatibility
+Engine releases follow semantic versioning. The contract they version is:
+
+* the `rebc` commands and the WebAssembly functions: their input and output JSON, `rebc`'s exit
+  status and error object;
+* both schemas (8.1) and every error, warning and field-error code with its parameters (8.2);
+* the `.reb` language: the tags, attributes, column types, `show-if` conditions, template functions
+  with their argument forms, and system values;
+* what a template compiles and renders to: the cases in `testdata/golden` (each a `.reb` with its
+  expected schema, compiled template and rendered document), `testdata/formula_cases.json` and
+  `testdata/show_if_cases.json`.
+
+The engine's Go packages (`internal/`) and the wording of messages (`error`, `message`; consumers
+translate by code) are not part of it.
+
+* A **patch** release fixes bugs. It changes output only where the output contradicted this
+  specification, and its changelog entry lists each such change.
+* A **minor** release adds: tags, attributes, functions, optional input, output fields, warning
+  codes. Consumers ignore output fields and warning codes they do not know. A new error or
+  field-error code only concerns templates that use something the release added.
+* A **major** release is anything else: removing or renaming part of the contract, refusing a
+  template an earlier release of the same major version accepted, or changing what such a template
+  compiles or renders to.
+
+Before v1.0.0, a minor release may also break the contract; the changelog says how.
 

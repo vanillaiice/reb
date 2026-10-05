@@ -1,0 +1,116 @@
+{
+  "compile": {
+    "engineVersion": "(the engine version)",
+    "fields": {
+      "fields": [
+        {
+          "key": "site",
+          "kind": "text",
+          "label": "",
+          "maxLength": 10000,
+          "type": "text"
+        },
+        {
+          "key": "never_printed",
+          "kind": "text",
+          "label": "Never printed",
+          "maxLength": 10000,
+          "type": "text"
+        },
+        {
+          "key": "watched",
+          "kind": "text",
+          "label": "Watched",
+          "maxLength": 10000,
+          "showIf": "ghost_field",
+          "type": "text"
+        },
+        {
+          "columns": [
+            {
+              "key": "a",
+              "kind": "number",
+              "label": "A"
+            },
+            {
+              "key": "b",
+              "kind": "text",
+              "label": "B"
+            }
+          ],
+          "key": "rows",
+          "kind": "table",
+          "label": "Rows",
+          "type": "table"
+        }
+      ],
+      "schemaVersion": 2
+    },
+    "schema": [
+      {
+        "key": "site",
+        "label": "",
+        "type": "text"
+      },
+      {
+        "key": "never_printed",
+        "label": "Never printed",
+        "type": "text"
+      },
+      {
+        "key": "watched",
+        "label": "Watched",
+        "showIf": "ghost_field",
+        "type": "text"
+      },
+      {
+        "key": "rows",
+        "label": "Rows",
+        "options": [
+          "a:number",
+          "b:text"
+        ],
+        "type": "table"
+      }
+    ],
+    "warnings": [
+      {
+        "code": "missing_label",
+        "message": "site has no label",
+        "params": {
+          "field": "site"
+        }
+      },
+      {
+        "code": "show_if_unknown_field",
+        "message": "the show-if of watched reads ghost_field, which the template does not declare",
+        "params": {
+          "field": "watched",
+          "name": "ghost_field"
+        }
+      },
+      {
+        "code": "unknown_binding",
+        "message": "the rows of rows print .c, which is not one of its columns",
+        "params": {
+          "name": "c",
+          "table": "rows"
+        }
+      },
+      {
+        "code": "unknown_binding",
+        "message": "the template prints .sitee, which no field declares and is not a system value",
+        "params": {
+          "name": "sitee"
+        }
+      },
+      {
+        "code": "duplicate_field",
+        "message": "site is declared more than once as different kinds of field; only the first counts",
+        "params": {
+          "field": "site"
+        }
+      }
+    ]
+  }
+}

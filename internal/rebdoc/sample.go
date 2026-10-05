@@ -36,10 +36,11 @@ func SampleAnswers(schema Schema) map[string]any {
 	return answers
 }
 
-// SampleSystem is the system values (spec section 5.1) a preview renders with.
+// SampleSystem is the system values (spec section 5.1) a preview renders with. Numbers are float64,
+// as they arrive from JSON in a real document.
 func SampleSystem() map[string]any {
 	return map[string]any{
-		"ID": "00000000-0000-0000-0000-000000000000", "Name": "Sample document", "Number": 1, "Reference": "D-1",
+		"ID": "00000000-0000-0000-0000-000000000000", "Name": "Sample document", "Number": 1.0, "Reference": "D-1",
 		"ProjectName": "Sample project", "ReporterName": "Sample author", "TemplateName": "Sample template",
 		"CreatedAt": time.Now().Format(time.RFC3339), "OrganizationName": "Sample organization",
 		"OrganizationLogo": placeholder, "Attachments": []any{}, "Photos": []any{},

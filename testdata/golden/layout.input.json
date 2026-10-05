@@ -1,0 +1,14 @@
+{
+  "system": {"ProjectName": "North Yard"},
+  "answers": {
+    "site": "Gate 4",
+    "urgent": "true",
+    "inspector": "A. Karim",
+    "isolated": 1,
+    "shift": "Night",
+    "photos": ["upload:1", " upload:2 ", ""],
+    "drawings": "upload:3",
+    "sig": "upload:4"
+  },
+  "assets": {"upload:1": "p1.jpg", "upload:2": "p2.jpg", "upload:3": "d1.png", "upload:4": "sig.png"}
+}

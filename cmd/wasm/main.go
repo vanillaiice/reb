@@ -16,18 +16,19 @@
 //	                       error?, code?, params?, execError?}
 //	                      (schema is the raw schema as a JSON string, as before; previewHtml is the
 //	                      template rendered with sample answers)
-//	__rebPrepare(json) {fields, answers}                         -> {answers, errors}
-//	__rebRender(json)  {html, system, answers, assets, fields?}  -> {html} or {error}
+//	__rebPrepare(json) {fields | schema, answers}                         -> {answers, errors} or {error}
+//	__rebRender(json)  {html, system, answers, assets, fields? | schema?} -> {html} or {error}
 //	__rebVersion()     -> the engine version
 package main
 
 import (
 	"encoding/json"
+	"errors"
 	"syscall/js"
 
 	"github.com/vanillaiice/reb"
-	"github.com/vanillaiice/reb/rebdoc"
-	"github.com/vanillaiice/reb/rebrender"
+	"github.com/vanillaiice/reb/internal/rebdoc"
+	"github.com/vanillaiice/reb/internal/rebrender"
 )
 
 func main() {
@@ -50,7 +51,8 @@ func argument(args []js.Value) string {
 func compile(source string) string {
 	compiled, err := rebdoc.Compile(source)
 	if err != nil {
-		if coded, ok := err.(*rebdoc.Error); ok {
+		var coded *rebdoc.Error
+		if errors.As(err, &coded) {
 			return marshal(map[string]any{"error": coded.Message, "code": coded.Code, "params": coded.Params})
 		}
 		return marshal(map[string]any{"error": err.Error()})
@@ -74,27 +76,31 @@ func compile(source string) string {
 
 func prepare(input string) string {
 	var in struct {
-		Fields  rebdoc.Schema  `json:"fields"`
+		rebdoc.SchemaInput
 		Answers map[string]any `json:"answers"`
 	}
 	if err := json.Unmarshal([]byte(input), &in); err != nil {
 		return marshal(map[string]any{"error": "invalid input: " + err.Error()})
 	}
-	return marshal(rebdoc.Prepare(in.Fields, in.Answers))
+	schema := in.Resolve()
+	if schema == nil {
+		return marshal(map[string]any{"error": "prepare needs fields or schema"})
+	}
+	return marshal(rebdoc.Prepare(*schema, in.Answers))
 }
 
 func render(input string) string {
 	var in struct {
+		rebdoc.SchemaInput
 		HTML    string            `json:"html"`
 		System  map[string]any    `json:"system"`
 		Answers map[string]any    `json:"answers"`
 		Assets  map[string]string `json:"assets"`
-		Fields  *rebdoc.Schema    `json:"fields"`
 	}
 	if err := json.Unmarshal([]byte(input), &in); err != nil {
 		return marshal(map[string]any{"error": "invalid input: " + err.Error()})
 	}
-	html, err := rebrender.CompileHTML(in.HTML, rebdoc.BuildContext(in.System, in.Answers, in.Assets, in.Fields))
+	html, err := rebrender.CompileHTML(in.HTML, rebdoc.BuildContext(in.System, in.Answers, in.Assets, in.Resolve()))
 	if err != nil {
 		return marshal(map[string]any{"error": err.Error()})
 	}

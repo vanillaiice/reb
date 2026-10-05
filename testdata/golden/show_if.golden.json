@@ -1,0 +1,162 @@
+{
+  "compile": {
+    "engineVersion": "(the engine version)",
+    "fields": {
+      "fields": [
+        {
+          "help": "Pick one",
+          "key": "work_type",
+          "kind": "select",
+          "label": "Work type",
+          "options": [
+            "Hot work",
+            "Cold work"
+          ],
+          "required": true,
+          "type": "select"
+        },
+        {
+          "key": "fire_watch",
+          "kind": "text",
+          "label": "Fire watch",
+          "maxLength": 10000,
+          "placeholder": "Name",
+          "required": true,
+          "showIf": "work_type == 'Hot work'",
+          "type": "text"
+        },
+        {
+          "key": "extinguisher",
+          "kind": "checkbox",
+          "label": "Extinguisher",
+          "required": true,
+          "showIf": "fire_watch",
+          "type": "checkbox"
+        },
+        {
+          "default": "2",
+          "key": "crew",
+          "kind": "number",
+          "label": "Crew",
+          "max": "12",
+          "min": "1",
+          "step": "1",
+          "type": "number"
+        },
+        {
+          "default": "today",
+          "key": "start",
+          "kind": "date",
+          "label": "Start",
+          "max": "2026-12-31",
+          "min": "2026-01-01",
+          "type": "date"
+        },
+        {
+          "key": "permit_code",
+          "kind": "text",
+          "label": "Permit code",
+          "maxLength": 10000,
+          "pattern": "[A-Z]{2}-\\d{3}",
+          "type": "text"
+        },
+        {
+          "key": "remarks",
+          "kind": "textarea",
+          "label": "Remarks",
+          "maxLength": 50000,
+          "showIf": "not (crew == 0) and work_type != ''",
+          "type": "textarea"
+        }
+      ],
+      "schemaVersion": 2
+    },
+    "schema": [
+      {
+        "help": "Pick one",
+        "key": "work_type",
+        "label": "Work type",
+        "options": [
+          "Hot work",
+          "Cold work"
+        ],
+        "required": true,
+        "type": "select"
+      },
+      {
+        "key": "fire_watch",
+        "label": "Fire watch",
+        "placeholder": "Name",
+        "required": true,
+        "showIf": "work_type == 'Hot work'",
+        "type": "text"
+      },
+      {
+        "key": "extinguisher",
+        "label": "Extinguisher",
+        "required": true,
+        "showIf": "fire_watch",
+        "type": "checkbox"
+      },
+      {
+        "default": "2",
+        "key": "crew",
+        "label": "Crew",
+        "max": "12",
+        "min": "1",
+        "step": "1",
+        "type": "number"
+      },
+      {
+        "default": "today",
+        "key": "start",
+        "label": "Start",
+        "max": "2026-12-31",
+        "min": "2026-01-01",
+        "type": "date"
+      },
+      {
+        "key": "permit_code",
+        "label": "Permit code",
+        "pattern": "[A-Z]{2}-\\d{3}",
+        "type": "text"
+      },
+      {
+        "key": "remarks",
+        "label": "Remarks",
+        "showIf": "not (crew == 0) and work_type != ''",
+        "type": "textarea"
+      }
+    ],
+    "warnings": []
+  },
+  "prepare": {
+    "answers": {
+      "crew": "40",
+      "permit_code": "ab-12",
+      "remarks": "Line one\nLine \u003ctwo\u003e",
+      "start": "2025-01-05",
+      "work_type": "Cold work"
+    },
+    "errors": [
+      {
+        "code": "too_large",
+        "key": "crew",
+        "params": {
+          "count": "12"
+        }
+      },
+      {
+        "code": "too_small",
+        "key": "start",
+        "params": {
+          "count": "2026-01-01"
+        }
+      },
+      {
+        "code": "invalid",
+        "key": "permit_code"
+      }
+    ]
+  }
+}

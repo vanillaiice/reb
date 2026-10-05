@@ -138,7 +138,7 @@
   "expression": "2*-3",
   "row": {},
   "precision": 2,
-  "expected": "-3.00"
+  "expected": "-6.00"
  },
  {
   "expression": "a*b",
@@ -173,5 +173,157 @@
   },
   "precision": 1,
   "expected": "0.0"
+ },
+ {
+  "expression": "a*b",
+  "row": {
+   "a": "2",
+   "b": "-4"
+  },
+  "precision": 2,
+  "expected": "-8.00"
+ },
+ {
+  "expression": "a-b",
+  "row": {
+   "a": "5",
+   "b": "-3"
+  },
+  "precision": 2,
+  "expected": "8.00"
+ },
+ {
+  "expression": "a/b",
+  "row": {
+   "a": "10",
+   "b": "-2"
+  },
+  "precision": 2,
+  "expected": "-5.00"
+ },
+ {
+  "expression": "a+b",
+  "row": {
+   "a": "5",
+   "b": "-3"
+  },
+  "precision": 2,
+  "expected": "2.00"
+ },
+ {
+  "expression": "-a+b",
+  "row": {
+   "a": "1",
+   "b": "3"
+  },
+  "precision": 2,
+  "expected": "2.00"
+ },
+ {
+  "expression": "-(a+b)*2",
+  "row": {
+   "a": "1",
+   "b": "3"
+  },
+  "precision": 0,
+  "expected": "-8"
+ },
+ {
+  "expression": "a--b",
+  "row": {
+   "a": "1",
+   "b": "2"
+  },
+  "precision": 2,
+  "expected": "3.00"
+ },
+ {
+  "expression": "+a*-+b",
+  "row": {
+   "a": "3",
+   "b": "2"
+  },
+  "precision": 1,
+  "expected": "-6.0"
+ },
+ {
+  "expression": "qty*rate",
+  "row": {
+   "qty": 3,
+   "rate": -1.5
+  },
+  "precision": 2,
+  "expected": "-4.50"
+ },
+ {
+  "expression": "a*2",
+  "row": {
+   "a": "0.0000001"
+  },
+  "precision": 7,
+  "expected": "0.0000002"
+ },
+ {
+  "expression": ".5*a+5.",
+  "row": {
+   "a": "4"
+  },
+  "precision": 1,
+  "expected": "7.0"
+ },
+ {
+  "expression": "a/(b-b)",
+  "row": {
+   "a": "4",
+   "b": "1"
+  },
+  "precision": 2,
+  "expected": "0.00"
+ },
+ {
+  "expression": "",
+  "row": {},
+  "precision": 2,
+  "expected": "0.00"
+ },
+ {
+  "expression": "qty*rate)",
+  "row": {
+   "qty": "2",
+   "rate": "3"
+  },
+  "precision": 2,
+  "expected": "0.00"
+ },
+ {
+  "expression": "a b",
+  "row": {
+   "a": "2",
+   "b": "3"
+  },
+  "precision": 2,
+  "expected": "0.00"
+ },
+ {
+  "expression": "a^2",
+  "row": {
+   "a": "3"
+  },
+  "precision": 2,
+  "expected": "0.00"
+ },
+ {
+  "expression": "a*",
+  "row": {
+   "a": "3"
+  },
+  "precision": 2,
+  "expected": "0.00"
+ },
+ {
+  "expression": ".",
+  "row": {},
+  "precision": 2,
+  "expected": "0.00"
  }
 ]

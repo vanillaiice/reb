@@ -1,0 +1,18 @@
+<style>
+  .urgent { color: #b91c1c; }
+</style>
+
+<script src="tailwindcss.js"></script>
+<rebar-pdf-header-extract style="display:none;" class="text-xs"><span>{{.ProjectName}}</span></rebar-pdf-header-extract>
+
+
+
+<h1 {{if .urgent}}class="urgent" {{end}}>Inspection at {{.site}}</h1>
+<p>Inspector: <span class="font-bold">{{.inspector}}</span></p>
+<span>{{.isolated}}</span>
+<span>{{.shift}}</span>
+<div style="page-break-after: always; clear: both;"></div>
+<div class="grid grid-cols-2">{{range .photos}}<img src="{{.}}" class="w-full object-cover rounded shadow-sm"/>{{end}}</div>
+<div>{{range .drawings}}<img src="{{.}}" class="w-full object-cover rounded shadow-sm"/>{{end}}</div>
+<img src="{{.sig}}" class="h-16 object-contain"/>
+<rebar-pdf-footer-extract style="display:none;"><div>Page <span class="pageNumber"></span> of <span class="totalPages"></span></div></rebar-pdf-footer-extract>

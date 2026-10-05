@@ -1,0 +1,7 @@
+{
+  "code": "invalid_pattern",
+  "params": {
+    "field": "a"
+  },
+  "error": "invalid pattern on a: error parsing regexp: missing closing ]: `[a-z`"
+}

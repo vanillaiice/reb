@@ -76,18 +76,15 @@ func TestRenderReplacesAssetsAndSanitizes(t *testing.T) {
 	}
 }
 
-func TestRenderSanitizesAnswersWhenFlattened(t *testing.T) {
+func TestRenderAnswersArePlainText(t *testing.T) {
 	result := runJSON(t, "render", map[string]any{
-		"html":    `{{.notes}}|{{multiply .qty .rate | formatNumber 2}}`,
-		"answers": map[string]any{"notes": `<b>bold</b><img src=x onerror=alert(1)>`, "qty": "3", "rate": 2.5},
+		"html":    `{{.notes}}|{{.notes | safeHTML}}|{{if eq .dept "R&D"}}match{{end}}|{{multiply .qty .rate | formatNumber 2}}`,
+		"answers": map[string]any{"notes": `<b>bold</b><img src=x onerror=alert(1)>`, "dept": "R&D", "qty": "3", "rate": 2.5},
 	})
 
-	html := result["html"].(string)
-	if !strings.Contains(html, "<b>bold</b>") || strings.Contains(html, "onerror") {
-		t.Errorf("unexpected sanitizing result %q", html)
-	}
-	if !strings.HasSuffix(html, "|7.50") {
-		t.Errorf("math on a sanitized answer: got %q", html)
+	want := `&lt;b&gt;bold&lt;/b&gt;&lt;img src=x onerror=alert(1)&gt;|<b>bold</b><img src="x">|match|7.50`
+	if html := result["html"].(string); html != want {
+		t.Errorf("got  %q\nwant %q", html, want)
 	}
 }
 

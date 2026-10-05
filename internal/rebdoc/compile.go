@@ -6,14 +6,13 @@
 package rebdoc
 
 import (
-	"encoding/json"
 	"errors"
 	"regexp"
 	"strings"
 
 	"github.com/vanillaiice/reb"
-	"github.com/vanillaiice/reb/rebcompiler"
-	"github.com/vanillaiice/reb/rebrender"
+	"github.com/vanillaiice/reb/internal/rebcompiler"
+	"github.com/vanillaiice/reb/internal/rebrender"
 )
 
 // Compiled is what a consumer keeps for a template version.
@@ -56,20 +55,13 @@ type Warning struct {
 // Compile compiles .reb source, normalizes its schema and checks what the compiler does not: show-if
 // conditions and patterns parse, and the template's Go syntax could render.
 func Compile(source string) (*Compiled, error) {
-	rawJSON, html, err := rebcompiler.Compile(source)
+	raw, html, err := rebcompiler.Compile(source)
 	if err != nil {
 		var compileError *rebcompiler.Error
 		if errors.As(err, &compileError) {
 			return nil, &Error{Code: compileError.Code, Params: compileError.Params, Message: compileError.Message}
 		}
 		return nil, &Error{Code: "invalid", Params: map[string]string{"detail": err.Error()}, Message: err.Error()}
-	}
-	var raw []rebcompiler.RebFieldSchema
-	if err := json.Unmarshal(rawJSON, &raw); err != nil {
-		return nil, &Error{Code: "invalid", Params: map[string]string{"detail": err.Error()}, Message: err.Error()}
-	}
-	if raw == nil {
-		raw = []rebcompiler.RebFieldSchema{}
 	}
 
 	if err := rebrender.Check(html); err != nil {
@@ -98,7 +90,7 @@ func Compile(source string) (*Compiled, error) {
 			}
 		}
 		if field.Pattern != "" {
-			if _, err := regexp.Compile(`^(?:` + field.Pattern + `)$`); err != nil {
+			if _, err := regexp.Compile(field.Pattern); err != nil {
 				return nil, &Error{Code: "invalid_pattern", Params: map[string]string{"field": field.Key},
 					Message: "invalid pattern on " + field.Key + ": " + err.Error()}
 			}

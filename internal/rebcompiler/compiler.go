@@ -7,7 +7,6 @@ package rebcompiler
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
@@ -30,6 +29,11 @@ var (
 
 	// fieldName is what a Go template can address as {{.name}}.
 	fieldName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+	// What html.Parse does to Go template syntax, undone after rendering (see Compile).
+	actionAsAttribute = regexp.MustCompile(`\{\{([a-zA-Z]+)="" `)
+	actionAsEmptyAttr = regexp.MustCompile(`\{\{([^}]+)\}\}=""`)
+	action            = regexp.MustCompile(`(?s)\{\{.*?\}\}`)
 )
 
 // RebFieldSchema is one declared field, as the tag wrote it (the "raw" schema, schemaVersion 1, which
@@ -61,9 +65,9 @@ type Error struct {
 
 func (e *Error) Error() string { return e.Message }
 
-// Compile takes raw HTML with custom <reb-*> tags, extracts the field schema,
+// Compile takes raw HTML with custom <reb-*> tags, extracts the field schema (never nil),
 // and replaces the custom tags with native go html/template bindings.
-func Compile(rawHTML string) (json.RawMessage, string, error) {
+func Compile(rawHTML string) ([]RebFieldSchema, string, error) {
 	// Strip HTML comments entirely
 	rawHTML = htmlComment.ReplaceAllString(rawHTML, "")
 
@@ -82,7 +86,7 @@ func Compile(rawHTML string) (json.RawMessage, string, error) {
 		return nil, "", err
 	}
 
-	var schema []RebFieldSchema
+	schema := []RebFieldSchema{}
 	var walkErr error
 
 	getAttr := func(n *html.Node, key string) string {
@@ -325,7 +329,7 @@ func Compile(rawHTML string) (json.RawMessage, string, error) {
 	}
 
 	var buf bytes.Buffer
-	if strings.Contains(strings.ToLower(rawHTML), "<body") {
+	if hasBodyTag(rawHTML) {
 		if err := html.Render(&buf, node); err != nil {
 			return nil, "", err
 		}
@@ -349,31 +353,33 @@ func Compile(rawHTML string) (json.RawMessage, string, error) {
 
 	// Fix html.Parse mangling of Go template syntaxes inside HTML attributes
 	// <div {{if="" .cond}}> becomes <div {{if .cond}}>
-	re1 := regexp.MustCompile(`\{\{([a-zA-Z]+)="" `)
-	outHTML = re1.ReplaceAllString(outHTML, "{{$1 ")
+	outHTML = actionAsAttribute.ReplaceAllString(outHTML, "{{$1 ")
 
 	// <div {{end}}=""> becomes <div {{end}}>
-	re2 := regexp.MustCompile(`\{\{([^}]+)\}\}=""`)
-	outHTML = re2.ReplaceAllString(outHTML, "{{$1}}")
+	outHTML = actionAsEmptyAttr.ReplaceAllString(outHTML, "{{$1}}")
 
 	// Fix html.Parse escaping quotes inside Go template directives in text nodes
 	// {{if eq .severity &#34;C&#34;}} becomes {{if eq .severity "C"}}, also in an action written over
 	// several lines ({{sumColumn .rows "amount"\n  | formatMoney "QAR" 2}}).
-	re3 := regexp.MustCompile(`(?s)\{\{.*?\}\}`)
-	outHTML = re3.ReplaceAllStringFunc(outHTML, func(match string) string {
-		return html.UnescapeString(match)
-	})
+	outHTML = action.ReplaceAllStringFunc(outHTML, html.UnescapeString)
 
-	schemaBytes, err := json.Marshal(schema)
-	if err != nil {
-		return nil, "", err
+	return schema, strings.TrimSpace(outHTML), nil
+}
+
+// hasBodyTag reports whether the source has a <body> tag of its own (not "<body" inside an
+// attribute, a comment or a <style>).
+func hasBodyTag(source string) bool {
+	z := html.NewTokenizer(strings.NewReader(source))
+	for {
+		switch z.Next() {
+		case html.ErrorToken:
+			return false
+		case html.StartTagToken, html.SelfClosingTagToken:
+			if name, _ := z.TagName(); string(name) == "body" {
+				return true
+			}
+		}
 	}
-
-	if schemaBytes == nil || string(schemaBytes) == "null" {
-		schemaBytes = []byte("[]")
-	}
-
-	return json.RawMessage(schemaBytes), strings.TrimSpace(outHTML), nil
 }
 
 // findElement returns the first element with the given atom in document order.

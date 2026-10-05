@@ -16,17 +16,32 @@ as a version. Consumers then move to that version. The format is described in
 ## Layout
 
 ```
-rebcompiler/      .reb source -> raw field schema (JSON) + Go html/template
-rebrender/        executes a compiled template against data (math, formatNumber, formatMoney, formatDate ...)
-rebdoc/           what consumers need around it: Compile (normalized schema, coded errors, warnings),
-                  Prepare (answer validation, formulas, required/min/max/pattern, show-if),
-                  BuildContext (system values, file names, text-area paragraphs), sample answers
-cmd/rebc/         the JSON CLI
-cmd/wasm/         WebAssembly entry point for browsers (Studio, editor previews)
-assets/           tailwindcss.js (the Tailwind browser build <reb-tailwind> loads) and paged.polyfill.js
-testdata/         golden cases every consumer runs: formula_cases.json, show_if_cases.json
-docs/             the .reb specification
+cmd/rebc/              the JSON CLI
+cmd/wasm/              WebAssembly entry point for browsers (Studio, editor previews)
+internal/rebcompiler/  .reb source -> raw field schema + Go html/template
+internal/rebrender/    executes a compiled template against data (math, formatNumber, formatMoney, formatDate ...)
+internal/rebdoc/       what consumers need around it: Compile (normalized schema, coded errors, warnings),
+                       Prepare (answer validation, formulas, required/min/max/pattern, show-if),
+                       BuildContext (system values, file names, text-area paragraphs), sample answers
+assets/                tailwindcss.js (the Tailwind browser build <reb-tailwind> loads) and paged.polyfill.js
+testdata/              cases every consumer can run: formula_cases.json, show_if_cases.json, and golden/
+                       (templates with their expected schema, compiled template and rendered document)
+docs/                  the .reb specification
 ```
+
+The Go packages are internal: consumers run `rebc` or the WebAssembly build, never import them.
+
+## Compatibility
+
+Releases follow semantic versioning over the contract in
+[specification section 8.4](docs/specification.md#84-compatibility): the `rebc` and WebAssembly
+JSON, both schemas, the error and warning codes, the `.reb` language, and what the templates in
+`testdata/golden` compile and render to. Patch releases fix, minor releases add (consumers ignore
+output fields and warning codes they do not know), anything else is a major release.
+[CHANGELOG.md](CHANGELOG.md) lists every change consumers can see.
+
+To move a consumer to a new release, read its changelog entry and the diff of `testdata/golden`
+between the two tags (`git diff v0.4.1 v0.5.0 -- testdata/golden`).
 
 ## rebc
 
@@ -35,7 +50,7 @@ Input always arrives as one JSON object on stdin, never as arguments.
 ```
 rebc compile    {"reb"}                                  -> {"schema", "fields", "html", "engineVersion", "warnings"}
 rebc prepare    {"fields" | "schema", "answers"}         -> {"answers", "errors"}
-rebc render     {"html", "system", "answers", "assets", "fields"?}  -> {"html"}
+rebc render     {"html", "system", "answers", "assets", "fields"? | "schema"?}  -> {"html"}
 rebc normalize  {"schema"}                               -> {"schemaVersion", "fields"}
 rebc version                                             -> {"version"}
 
@@ -45,9 +60,12 @@ errors          exit status 1, stdout {"error", "code"?, "params"?}
 `schema` is the raw schema the tags declared, `fields` the normalized one (specification section 8).
 `prepare` cleans a document's answers, computes formula and row-number cells, drops fields hidden by
 `show-if` and returns coded errors. `render` replaces file references in the answers (also inside
-table rows) with the given file names, turns text areas into paragraphs when `fields` is given,
-flattens the answers into the template root without overriding system values, and sanitizes plain
-strings with bluemonday's UGC policy before executing the template.
+table rows) with the given file names, turns text areas into paragraphs when a schema is given, and
+flattens the answers into the template root without overriding system values. Answers stay plain
+text, escaped where the template prints them; `safeHTML` prints one as HTML sanitized with
+bluemonday's UGC policy.
+
+The WebAssembly build takes the same input for `__rebPrepare` and `__rebRender`.
 
 ## Build and test
 
@@ -55,6 +73,9 @@ Requires Go (see `go.mod`).
 
 ```bash
 go vet ./... && go test ./...
+
+# after a change to what templates compile or render to: rewrite testdata/golden, review the diff
+go test ./cmd/rebc -update
 
 # the WebAssembly build's tests run under Node
 GOOS=js GOARCH=wasm go test -exec="bash $(go env GOROOT)/lib/wasm/go_js_wasm_exec" ./cmd/wasm

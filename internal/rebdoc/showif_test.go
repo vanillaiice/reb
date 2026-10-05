@@ -13,7 +13,7 @@ import (
 )
 
 func TestShowIfCases(t *testing.T) {
-	raw, err := os.ReadFile("../testdata/show_if_cases.json")
+	raw, err := os.ReadFile("../../testdata/show_if_cases.json")
 	if err != nil {
 		t.Fatal(err)
 	}

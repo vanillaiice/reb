@@ -1,0 +1,10 @@
+{
+  "answers": {
+    "items": {
+      "1": {"item": "Cable tray", "qty": "12", "rate": "1250.5", "total": "999", "grade": "B", "ok": "on", "photo": "upload:7"},
+      "0": {"item": "Conduit", "qty": 3, "rate": "2.25", "grade": "A", "ok": false, "unknown": "dropped"},
+      "2": {"item": "Fixings", "qty": "abc", "rate": "-4", "grade": "Z"}
+    }
+  },
+  "assets": {"upload:7": "photo-7.jpg"}
+}

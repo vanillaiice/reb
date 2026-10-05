@@ -1,0 +1,9 @@
+{
+  "system": {"Name": "Permit 12", "Reference": "D-12"},
+  "answers": {
+    "permit_number": 4471,
+    "clearance_type": "Confined Space Entry",
+    "ppe_verified": "Harness & gas detector",
+    "notes": "Entry supervised.\nGas readings logged hourly.\n\nNo hot work nearby."
+  }
+}

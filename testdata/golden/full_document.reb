@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>{{.TemplateName}}</title></head>
+<body>
+  <header>
+    {{if .OrganizationLogo}}<img src="{{.OrganizationLogo}}" alt="{{.OrganizationName}}">{{end}}
+    <h1>{{.Name}} ({{.Reference}}, no. {{.Number}})</h1>
+    <p>{{.ProjectName}}, by {{.ReporterName}} on {{formatDate "2 Jan 2006" .CreatedAt}}</p>
+  </header>
+  <reb-select name="dept" label="Department" options="R&D,Operations"></reb-select>
+  <reb-text name="contractor" label="Contractor"></reb-text>
+  <reb-text name="summary" label="Summary"></reb-text>
+  <p>{{if eq .dept "R&D"}}research{{else}}not research{{end}}</p>
+  <p>{{if eq .contractor "O'Brien"}}known contractor{{else}}other contractor{{end}}</p>
+  <p title="{{.contractor}}">{{.Answers.summary}}</p>
+  <ul>{{range .Attachments}}<li>{{.FileName}}</li>{{end}}</ul>
+</body>
+</html>

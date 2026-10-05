@@ -1,0 +1,64 @@
+{
+  "compile": {
+    "engineVersion": "(the engine version)",
+    "fields": {
+      "fields": [
+        {
+          "key": "dept",
+          "kind": "select",
+          "label": "Department",
+          "options": [
+            "R\u0026D",
+            "Operations"
+          ],
+          "type": "select"
+        },
+        {
+          "key": "contractor",
+          "kind": "text",
+          "label": "Contractor",
+          "maxLength": 10000,
+          "type": "text"
+        },
+        {
+          "key": "summary",
+          "kind": "text",
+          "label": "Summary",
+          "maxLength": 10000,
+          "type": "text"
+        }
+      ],
+      "schemaVersion": 2
+    },
+    "schema": [
+      {
+        "key": "dept",
+        "label": "Department",
+        "options": [
+          "R\u0026D",
+          "Operations"
+        ],
+        "type": "select"
+      },
+      {
+        "key": "contractor",
+        "label": "Contractor",
+        "type": "text"
+      },
+      {
+        "key": "summary",
+        "label": "Summary",
+        "type": "text"
+      }
+    ],
+    "warnings": []
+  },
+  "prepare": {
+    "answers": {
+      "contractor": "O'Brien",
+      "dept": "R\u0026D",
+      "summary": "\u003cb\u003ePoured\u003c/b\u003e slab 3 \u003cscript\u003ealert(1)\u003c/script\u003e"
+    },
+    "errors": []
+  }
+}

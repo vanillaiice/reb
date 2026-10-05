@@ -1,0 +1,8 @@
+{
+  "code": "invalid_field_name",
+  "params": {
+    "name": "site-name",
+    "tag": "reb-text"
+  },
+  "error": "invalid field name \"site-name\" on \u003creb-text\u003e: use letters, digits and underscores, starting with a letter or underscore"
+}

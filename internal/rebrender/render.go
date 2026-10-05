@@ -5,8 +5,7 @@
 
 // Package rebrender executes compiled .reb template HTML against context data.
 //
-// It is a leaf package depending only on the standard library so it can be
-// reused both by the API server and by the WebAssembly build of the editor.
+// rebc and the WebAssembly build both render through it.
 package rebrender
 
 import (
@@ -18,6 +17,8 @@ import (
 	"strings"
 	tparse "text/template/parse"
 	"time"
+
+	"github.com/microcosm-cc/bluemonday"
 )
 
 // toFloat converts a template value to a number. Answers reach the renderer as
@@ -129,6 +130,25 @@ func formatMoney(a, b, c any) string {
 	return out
 }
 
+// sanitizer is bluemonday's policy for user-generated content: formatting and links, no scripts,
+// styles or event handlers. Policies are safe for concurrent use.
+var sanitizer = bluemonday.UGCPolicy()
+
+// safeHTML prints a value as HTML. HTML the engine made (a text area's paragraphs) passes as it is;
+// anything else is answer text, sanitized first, so a template printing an answer with safeHTML
+// cannot be made to run a script. A missing answer renders as nothing, not "<nil>".
+func safeHTML(value any) template.HTML {
+	switch v := value.(type) {
+	case nil:
+		return ""
+	case template.HTML:
+		return v
+	case string:
+		return template.HTML(sanitizer.Sanitize(v))
+	}
+	return template.HTML(sanitizer.Sanitize(fmt.Sprint(value)))
+}
+
 // CompileHTML parses the raw template HTML markup and executes it with the provided custom context data, returning the final output string.
 func CompileHTML(htmlContent string, data any) (string, error) {
 	tmpl, err := parse(htmlContent)
@@ -166,13 +186,7 @@ func parse(htmlContent string) (*template.Template, error) {
 		"now": func() time.Time {
 			return time.Now()
 		},
-		"safeHTML": func(s any) template.HTML {
-			// A missing or empty answer must render as nothing, not "<nil>".
-			if s == nil {
-				return ""
-			}
-			return template.HTML(fmt.Sprintf("%v", s))
-		},
+		"safeHTML":  safeHTML,
 		"toFloat64": toFloat,
 		"multiply": func(a, b any) float64 {
 			return toFloat(a) * toFloat(b)

@@ -1,0 +1,8 @@
+{
+  "code": "invalid_show_if",
+  "params": {
+    "detail": "the condition ends too early",
+    "field": "a"
+  },
+  "error": "invalid show-if on a: the condition ends too early"
+}

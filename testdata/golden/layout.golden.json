@@ -1,0 +1,140 @@
+{
+  "compile": {
+    "engineVersion": "(the engine version)",
+    "fields": {
+      "fields": [
+        {
+          "key": "part_a",
+          "kind": "section",
+          "label": "Part A",
+          "type": "section"
+        },
+        {
+          "key": "site",
+          "kind": "text",
+          "label": "Site",
+          "maxLength": 10000,
+          "type": "text"
+        },
+        {
+          "key": "urgent",
+          "kind": "checkbox",
+          "label": "Urgent",
+          "type": "checkbox"
+        },
+        {
+          "key": "inspector",
+          "kind": "text",
+          "label": "Inspector",
+          "maxLength": 10000,
+          "type": "text"
+        },
+        {
+          "key": "isolated",
+          "kind": "checkbox",
+          "label": "Isolated",
+          "type": "checkbox"
+        },
+        {
+          "key": "shift",
+          "kind": "select",
+          "label": "Shift",
+          "options": [
+            "Day",
+            "Night"
+          ],
+          "type": "radio"
+        },
+        {
+          "key": "photos",
+          "kind": "images",
+          "label": "Photos",
+          "type": "photogrid"
+        },
+        {
+          "key": "drawings",
+          "kind": "images",
+          "label": "Drawings",
+          "type": "attachments"
+        },
+        {
+          "key": "sig",
+          "kind": "signature",
+          "label": "Signature",
+          "type": "signature"
+        }
+      ],
+      "schemaVersion": 2
+    },
+    "schema": [
+      {
+        "key": "part_a",
+        "label": "Part A",
+        "type": "section"
+      },
+      {
+        "key": "site",
+        "label": "Site",
+        "type": "text"
+      },
+      {
+        "key": "urgent",
+        "label": "Urgent",
+        "type": "checkbox"
+      },
+      {
+        "key": "inspector",
+        "label": "Inspector",
+        "type": "text"
+      },
+      {
+        "key": "isolated",
+        "label": "Isolated",
+        "type": "checkbox"
+      },
+      {
+        "key": "shift",
+        "label": "Shift",
+        "options": [
+          "Day",
+          "Night"
+        ],
+        "type": "radio"
+      },
+      {
+        "key": "photos",
+        "label": "Photos",
+        "type": "photogrid"
+      },
+      {
+        "key": "drawings",
+        "label": "Drawings",
+        "type": "attachments"
+      },
+      {
+        "key": "sig",
+        "label": "Signature",
+        "type": "signature"
+      }
+    ],
+    "warnings": []
+  },
+  "prepare": {
+    "answers": {
+      "drawings": [
+        "upload:3"
+      ],
+      "inspector": "A. Karim",
+      "isolated": true,
+      "photos": [
+        "upload:1",
+        "upload:2"
+      ],
+      "shift": "Night",
+      "sig": "upload:4",
+      "site": "Gate 4",
+      "urgent": true
+    },
+    "errors": []
+  }
+}

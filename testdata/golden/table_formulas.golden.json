@@ -1,0 +1,137 @@
+{
+  "compile": {
+    "engineVersion": "(the engine version)",
+    "fields": {
+      "fields": [
+        {
+          "columns": [
+            {
+              "key": "no",
+              "kind": "autoincrement",
+              "label": "No"
+            },
+            {
+              "key": "item",
+              "kind": "text",
+              "label": "Item"
+            },
+            {
+              "key": "qty",
+              "kind": "number",
+              "label": "Qty"
+            },
+            {
+              "key": "rate",
+              "kind": "number",
+              "label": "Rate"
+            },
+            {
+              "expression": "qty*rate",
+              "key": "total",
+              "kind": "formula",
+              "label": "Total",
+              "precision": 2
+            },
+            {
+              "key": "grade",
+              "kind": "select",
+              "label": "Grade",
+              "options": [
+                "A",
+                "B",
+                "C"
+              ]
+            },
+            {
+              "key": "ok",
+              "kind": "checkbox",
+              "label": "Ok"
+            },
+            {
+              "key": "photo",
+              "kind": "image",
+              "label": "Photo"
+            }
+          ],
+          "key": "items",
+          "kind": "table",
+          "label": "Items",
+          "type": "table"
+        }
+      ],
+      "schemaVersion": 2
+    },
+    "schema": [
+      {
+        "key": "items",
+        "label": "Items",
+        "options": [
+          "no:autoincrement",
+          "item:text",
+          "qty:number",
+          "rate:number",
+          "total:formula[qty*rate|2]",
+          "grade:select[A|B|C]",
+          "ok:checkbox",
+          "photo:photo"
+        ],
+        "type": "table"
+      }
+    ],
+    "warnings": []
+  },
+  "prepare": {
+    "answers": {
+      "items": [
+        {
+          "grade": "A",
+          "item": "Conduit",
+          "no": "1",
+          "ok": false,
+          "photo": "",
+          "qty": "3",
+          "rate": "2.25",
+          "total": "6.75"
+        },
+        {
+          "grade": "B",
+          "item": "Cable tray",
+          "no": "2",
+          "ok": true,
+          "photo": "upload:7",
+          "qty": "12",
+          "rate": "1250.5",
+          "total": "15006.00"
+        },
+        {
+          "grade": "",
+          "item": "Fixings",
+          "no": "3",
+          "ok": false,
+          "photo": "",
+          "qty": "",
+          "rate": "-4",
+          "total": "0.00"
+        }
+      ]
+    },
+    "errors": [
+      {
+        "code": "not_a_number",
+        "key": "items",
+        "params": {
+          "column": "qty",
+          "row": 2
+        }
+      },
+      {
+        "code": "not_an_option",
+        "key": "items",
+        "params": {
+          "column": "grade",
+          "row": 2
+        }
+      }
+    ]
+  }
+}

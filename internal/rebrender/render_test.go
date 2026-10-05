@@ -59,3 +59,13 @@ func TestFormatMoney(t *testing.T) {
 		}
 	}
 }
+
+func TestSafeHTMLSanitizesAnswerText(t *testing.T) {
+	got := render(t, `{{.text | safeHTML}}|{{.made | safeHTML}}`, map[string]any{
+		"text": `<p onclick="x()">hi</p><script>alert(1)</script>`,
+		"made": template.HTML(`<p style="color:red">engine HTML</p>`),
+	})
+	if want := `<p>hi</p>|<p style="color:red">engine HTML</p>`; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}

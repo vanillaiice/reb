@@ -1,0 +1,14 @@
+{
+  "system": {
+    "ID": "6f1c", "Name": "Daily report", "Number": 7, "Reference": "D-7", "ProjectName": "Tower B",
+    "ReporterName": "S. Ali", "TemplateName": "Daily", "CreatedAt": "2026-10-05T08:30:00Z",
+    "OrganizationName": "Acme & Sons", "OrganizationLogo": "logo.png",
+    "Attachments": [{"FileName": "a.pdf", "ObjectKey": "k1"}], "Photos": []
+  },
+  "answers": {
+    "dept": "R&D",
+    "contractor": "O'Brien",
+    "summary": "<b>Poured</b> slab 3 <script>alert(1)</script>",
+    "Name": "answers never override system values"
+  }
+}

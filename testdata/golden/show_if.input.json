@@ -1,0 +1,11 @@
+{
+  "answers": {
+    "work_type": "Cold work",
+    "fire_watch": "should be dropped",
+    "extinguisher": true,
+    "crew": "40",
+    "start": "20250105",
+    "permit_code": "ab-12",
+    "remarks": "Line one\nLine <two>"
+  }
+}
