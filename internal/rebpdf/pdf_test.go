@@ -7,17 +7,20 @@ package rebpdf
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"os"
 	"reflect"
 	"testing"
 
+	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/types"
+
 	"github.com/vanillaiice/reb/internal/rebdoc"
 )
 
 // testdata/form.pdf is testdata/golden/fillable.fillable.html printed by Chromium (headless
-// --print-to-pdf); testdata/filled.pdf is form.pdf through Fillable, then filled and saved
-// incrementally by another program (pypdf), as a PDF reader saves a form.
+// --print-to-pdf); testdata/filled.pdf is form.pdf through Fillable, then filled (the check box
+// ticked) and saved incrementally by another program (pypdf), as a PDF reader saves a form.
 func fixture(t *testing.T, name string) []byte {
 	t.Helper()
 	pdf, err := os.ReadFile("testdata/" + name)
@@ -27,8 +30,8 @@ func fixture(t *testing.T, name string) []byte {
 	return pdf
 }
 
-func TestFillableTurnsMarkersIntoTextFields(t *testing.T) {
-	pdf, err := Fillable(fixture(t, "form.pdf"), map[string]any{"supplier": "Gulf Steel", "quantity": 12.5, "remarks": true})
+func TestFillableTurnsMarkersIntoFields(t *testing.T) {
+	pdf, err := Fillable(fixture(t, "form.pdf"), map[string]any{"supplier": "Gulf Steel", "quantity": 12.5, "remarks": true, "crane": true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,13 +39,44 @@ func TestFillableTurnsMarkersIntoTextFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := map[string]string{"supplier": "Gulf Steel", "quantity": "12.5", "delivery": "", "remarks": ""}
+	want := map[string]string{"supplier": "Gulf Steel", "quantity": "12.5", "delivery": "", "remarks": "", "crane": "true"}
 	if !reflect.DeepEqual(values, want) {
 		t.Errorf("values = %q, want %q", values, want)
+	}
+	if states := checkBoxStates(t, pdf); !reflect.DeepEqual(states, []string{"Yes"}) {
+		t.Errorf("check box shows %q, want its check mark", states)
+	}
+	unticked, err := Fillable(fixture(t, "form.pdf"), map[string]any{"crane": "false"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if values, err := Values(unticked); err != nil || values["crane"] != "false" {
+		t.Errorf("crane = %q (%v), want false", values["crane"], err)
 	}
 	if bytes.Contains(pdf, []byte("reb-field:")) {
 		t.Error("a marker link is left in the PDF")
 	}
+}
+
+// checkBoxStates are the appearance states the check box widgets of a PDF show.
+func checkBoxStates(t *testing.T, pdf []byte) []string {
+	t.Helper()
+	ctx, err := read(pdf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var states []string
+	pageDict, _, _, err := ctx.XRefTable.PageDict(context.Background(), 1, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	annots, _ := ctx.XRefTable.DereferenceArray(pageDict["Annots"])
+	for _, entry := range annots {
+		if annot, err := ctx.XRefTable.DereferenceDict(entry); err == nil && annot["AS"] != nil {
+			states = append(states, string(annot["AS"].(types.Name)))
+		}
+	}
+	return states
 }
 
 func TestValuesOfAFilledForm(t *testing.T) {
@@ -51,7 +85,7 @@ func TestValuesOfAFilledForm(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := map[string]string{"supplier": "Qatar Steel – Ras Laffan", "quantity": "40", "delivery": "2026-11-02",
-		"remarks": "Gate 3 only.\nCall 30 min ahead."}
+		"remarks": "Gate 3 only.\nCall 30 min ahead.", "crane": "true"}
 	if !reflect.DeepEqual(values, want) {
 		t.Errorf("values = %q, want %q", values, want)
 	}
@@ -59,7 +93,8 @@ func TestValuesOfAFilledForm(t *testing.T) {
 
 func TestAnswersKeepTheTemplatesFillableFields(t *testing.T) {
 	compiled, err := rebdoc.Compile(`<reb-text name="supplier" label="Supplier" fillable></reb-text>
-		<reb-number name="quantity" label="Quantity"></reb-number><reb-textarea name="remarks" label="Remarks" fillable></reb-textarea>`)
+		<reb-number name="quantity" label="Quantity"></reb-number><reb-textarea name="remarks" label="Remarks" fillable></reb-textarea>
+		<reb-checkbox name="crane" label="Crane needed" fillable></reb-checkbox>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,9 +102,9 @@ func TestAnswersKeepTheTemplatesFillableFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := map[string]any{"supplier": "Qatar Steel – Ras Laffan", "remarks": "Gate 3 only.\nCall 30 min ahead."}
+	want := map[string]any{"supplier": "Qatar Steel – Ras Laffan", "remarks": "Gate 3 only.\nCall 30 min ahead.", "crane": true}
 	if !reflect.DeepEqual(answers, want) {
-		t.Errorf("answers = %q, want %q", answers, want)
+		t.Errorf("answers = %v, want %v", answers, want)
 	}
 }
 

@@ -26,6 +26,13 @@
           "type": "date"
         },
         {
+          "fillable": true,
+          "key": "crane",
+          "kind": "checkbox",
+          "label": "Crane needed",
+          "type": "checkbox"
+        },
+        {
           "key": "priority",
           "kind": "select",
           "label": "Priority",
@@ -64,6 +71,12 @@
         "key": "delivery",
         "label": "Delivery date",
         "type": "date"
+      },
+      {
+        "fillable": true,
+        "key": "crane",
+        "label": "Crane needed",
+        "type": "checkbox"
       },
       {
         "key": "priority",

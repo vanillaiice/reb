@@ -21,7 +21,7 @@ cmd/wasm/              WebAssembly entry point for browsers (Studio, editor prev
 cmd/wasmpdf/           the PDF form functions as a second, on-demand WebAssembly build
 internal/rebcompiler/  .reb source -> raw field schema + Go html/template
 internal/rebrender/    executes a compiled template against data (math, formatNumber, formatMoney, formatDate ...)
-internal/rebpdf/       fillable PDFs: printed fillable-field markers -> PDF text fields, and the answers typed back
+internal/rebpdf/       fillable PDFs: printed fillable-field markers -> PDF text fields and check boxes, and the answers typed back
 internal/rebdoc/       what consumers need around it: Compile (normalized schema, coded errors, warnings),
                        Prepare (answer validation, formulas, required/min/max/pattern, show-if),
                        BuildContext (system values, file names, text-area paragraphs), sample answers
@@ -72,8 +72,8 @@ bluemonday's UGC policy.
 The WebAssembly build takes the same input for `__rebPrepare` and `__rebRender`.
 
 `render` takes `"fillable": true` to print fields marked `fillable` as empty boxes; print that page
-to PDF (Chromium), then `fillable` turns the boxes into PDF text fields, pre-filled with the answers
-given. `pdf-answers` reads the template's fillable fields back from a filled PDF (specification
+to PDF (Chromium), then `fillable` turns the boxes into PDF text fields (a checkbox's into a check
+box), pre-filled with the answers given. `pdf-answers` reads the template's fillable fields back from a filled PDF (specification
 section 4.5). PDFs are base64 in the JSON. In a browser these two are `__rebFillable` and
 `__rebPdfAnswers`, in a separate build (`cmd/wasmpdf`, `rebpdf.wasm`): the PDF library (pdfcpu)
 would make the main build about 55% larger.

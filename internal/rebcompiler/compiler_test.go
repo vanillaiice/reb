@@ -135,7 +135,8 @@ func TestCompileFillableFields(t *testing.T) {
 	schema, out, err := Compile(`<p><reb-text name="client" label="Client" class="w-64" fillable /></p>
 		<reb-textarea name="notes" label="Notes" fillable></reb-textarea>
 		<reb-number name="qty" label="Qty" fillable="false" />
-		<reb-select name="grade" label="Grade" options="A,B" fillable></reb-select>`)
+		<reb-select name="grade" label="Grade" options="A,B" fillable></reb-select>
+		<reb-checkbox name="ok" label="OK" fillable></reb-checkbox>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,12 +144,13 @@ func TestCompileFillableFields(t *testing.T) {
 	for _, field := range schema {
 		fillable[field.Key] = field.Fillable
 	}
-	if want := map[string]bool{"client": true, "notes": true, "qty": false, "grade": false}; !reflect.DeepEqual(fillable, want) {
+	if want := map[string]bool{"client": true, "notes": true, "qty": false, "grade": false, "ok": true}; !reflect.DeepEqual(fillable, want) {
 		t.Errorf("fillable = %v, want %v", fillable, want)
 	}
 	for _, want := range []string{
 		`{{if $.Fillable}}<a href="reb-field:client" class="reb-fillable w-64"></a>{{else}}<span class="w-64">{{.client}}</span>{{end}}`,
 		`{{if $.Fillable}}<a href="reb-field:notes;multiline" class="reb-fillable reb-fillable-multiline"></a>{{else}}<div `,
+		`{{if $.Fillable}}<a href="reb-field:ok;checkbox" class="reb-fillable reb-fillable-checkbox"></a>{{else}}<span>{{.ok}}</span>{{end}}`,
 		`<span>{{.qty}}</span>`,
 		`<span>{{.grade}}</span>`,
 	} {

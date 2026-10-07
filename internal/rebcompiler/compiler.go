@@ -38,29 +38,34 @@ var (
 
 // pdf-forms:boxes (see ../docs/pdf-forms.md in the Rebar folder to remove).
 // FillableScheme starts the link a fillable field prints as when a document is rendered fillable:
-// "reb-field:NAME", or "reb-field:NAME;multiline" for a text area. Chromium keeps it as a link
-// annotation over the field's box, which rebpdf replaces with a text field.
+// "reb-field:NAME", "reb-field:NAME;multiline" for a text area, "reb-field:NAME;checkbox" for a
+// checkbox. Chromium keeps it as a link annotation over the field's box, which rebpdf replaces with a
+// text field (a checkbox: a check box field).
 const (
 	FillableScheme    = "reb-field:"
 	FillableMultiline = ";multiline"
+	FillableCheckbox  = ";checkbox"
 )
 
-// FillableMarker is the link target of a fillable field.
-func FillableMarker(name string, multiline bool) string {
-	if multiline {
+// FillableMarker is the link target of a fillable <reb-TYPE> field.
+func FillableMarker(name, rebType string) string {
+	switch rebType {
+	case "textarea":
 		return FillableScheme + name + FillableMultiline
+	case "checkbox":
+		return FillableScheme + name + FillableCheckbox
 	}
 	return FillableScheme + name
 }
 
-// fillableTypes are the tags whose answer can be typed into a PDF text field (the fillable attribute).
-var fillableTypes = map[string]bool{"text": true, "number": true, "date": true, "textarea": true}
+// fillableTypes are the tags whose answer can be typed (or ticked) into a PDF field (the fillable attribute).
+var fillableTypes = map[string]bool{"text": true, "number": true, "date": true, "textarea": true, "checkbox": true}
 
 // CanBeFillable reports whether a <reb-TYPE> tag takes the fillable attribute.
 func CanBeFillable(rebType string) bool { return fillableTypes[rebType] }
 
 // fillableCSS sizes the boxes of fillable fields; :where() keeps it below any class the template sets.
-const fillableCSS = `:where(.reb-fillable){display:inline-block;min-width:10em;height:1.3em;vertical-align:bottom;border-bottom:1px solid currentColor;color:inherit;text-decoration:none}:where(.reb-fillable-multiline){display:block;width:100%;height:5em;border:1px solid currentColor}`
+const fillableCSS = `:where(.reb-fillable){display:inline-block;min-width:10em;height:1.3em;vertical-align:bottom;border-bottom:1px solid currentColor;color:inherit;text-decoration:none}:where(.reb-fillable-multiline){display:block;width:100%;height:5em;border:1px solid currentColor}:where(.reb-fillable-checkbox){min-width:0;width:1em;height:1em;vertical-align:middle;border:1px solid currentColor}`
 
 // RebFieldSchema is one declared field, as the tag wrote it (the "raw" schema, schemaVersion 1, which
 // the Go API and the mobile app read). rebdoc.Normalize turns it into typed fields.
@@ -348,7 +353,7 @@ func Compile(rawHTML string) ([]RebFieldSchema, string, error) {
 			}
 
 			// pdf-forms:boxes: a fillable field prints, when the document is rendered fillable, an empty box linking
-			// to its marker instead of the answer; rebpdf turns the link into a PDF text field.
+			// to its marker instead of the answer; rebpdf turns the link into a PDF field.
 			if fillable {
 				if !fillableStyled {
 					fillableStyled = true
@@ -357,14 +362,17 @@ func Compile(rawHTML string) ([]RebFieldSchema, string, error) {
 					n.Parent.InsertBefore(style, n)
 				}
 				boxClass := "reb-fillable"
-				if rebType == "textarea" {
+				switch rebType {
+				case "textarea":
 					boxClass += " reb-fillable-multiline"
+				case "checkbox":
+					boxClass += " reb-fillable-checkbox"
 				}
 				if class != "" {
 					boxClass += " " + class
 				}
 				box := &html.Node{Type: html.ElementNode, Data: "a", DataAtom: atom.A, Attr: []html.Attribute{
-					{Key: "href", Val: FillableMarker(name, rebType == "textarea")},
+					{Key: "href", Val: FillableMarker(name, rebType)},
 					{Key: "class", Val: boxClass},
 				}}
 				n.Parent.InsertBefore(&html.Node{Type: html.TextNode, Data: `{{if $.Fillable}}`}, n)

@@ -92,7 +92,7 @@ type Field struct {
 	Step        string   `json:"step,omitempty"`
 	Pattern     string   `json:"pattern,omitempty"`
 	ShowIf      string   `json:"showIf,omitempty"`
-	Fillable    bool     `json:"fillable,omitempty"` // pdf-forms:boxes: typed into a PDF text field when rendered fillable
+	Fillable    bool     `json:"fillable,omitempty"` // pdf-forms:boxes: typed (or ticked) into a PDF field when rendered fillable
 }
 
 // Column is one column of a table field.

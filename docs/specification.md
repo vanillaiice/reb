@@ -74,8 +74,8 @@ These change how the form asks for the answer; they do not change the PDF layout
 * **`pattern`**: a regular expression the whole text answer must match (as HTML's `pattern`).
 * **`show-if`**: the field is shown only while this condition holds (3.3). A hidden field's answer
   is not kept.
-* **`fillable`**: on `<reb-text>`, `<reb-number>`, `<reb-date>` and `<reb-textarea>`, the answer can
-  also be typed into the PDF (section 4.5). Elsewhere it has no effect and compiles with a
+* **`fillable`**: on `<reb-text>`, `<reb-number>`, `<reb-date>`, `<reb-textarea>` and
+  `<reb-checkbox>`, the answer can also be typed (or ticked) into the PDF (section 4.5). Elsewhere it has no effect and compiles with a
   `fillable_ignored` warning.
 
 ### 3.3 `show-if` conditions
@@ -242,8 +242,8 @@ A document can be rendered in one of two modes, chosen by the consumer each time
 
 * **with data** (the default): every field prints its answer, as above;
 * **fillable**: a field marked `fillable` prints an empty box instead of its answer, and the PDF
-  made from the page carries a text field over each box, so someone without Rebar can fill the PDF in
-  any PDF reader. Fields not marked `fillable` still print their answers, so a document can go out
+  made from the page carries a text field over each box (a check box over a checkbox's), so someone
+  without Rebar can fill the PDF in any PDF reader. Fields not marked `fillable` still print their answers, so a document can go out
   half filled.
 
 In fillable mode, `<reb-text name="supplier" label="Supplier" fillable class="w-64" />` transpiles to
@@ -251,19 +251,21 @@ a link whose target names the field:
 ```html
 <a href="reb-field:supplier" class="reb-fillable w-64"></a>
 ```
-(`reb-field:remarks;multiline` and the extra class `reb-fillable-multiline` for a text area). The
+(`reb-field:remarks;multiline` and the extra class `reb-fillable-multiline` for a text area,
+`reb-field:crane;checkbox` and `reb-fillable-checkbox` for a checkbox). The
 compiled template holds both forms behind `{{if $.Fillable}}`. A built-in style, which any class
 the template sets overrides, makes the box an underlined `10em` wide line (a text area: a framed
-block the width of its container, `5em` high); size it with classes like any other element. A field
+block the width of its container, `5em` high; a checkbox: a framed `1em` square); size it with classes like any other element. A field
 printed twice gives two boxes of one PDF field, which share the value.
 
 Templates can test the mode themselves: `{{if .Fillable}}Fill in the boxes{{end}}`.
 
 Chromium flattens form inputs when it prints but keeps links, so the consumer turns the printed page
 into a form afterwards: `rebc fillable` (or `__rebFillable`) replaces each `reb-field:` link with a
-text field named after the field, pre-filled with the answers it is given. When the filled PDF comes
-back, `rebc pdf-answers` (or `__rebPdfAnswers`) reads the values of the template's fillable fields:
-plain text, to be checked with `prepare` and kept as the document's answers. Other fields the PDF
+text field named after the field, pre-filled with the answers it is given, and each checkbox link with
+a check box, ticked when its answer is. When the filled PDF comes back, `rebc pdf-answers` (or
+`__rebPdfAnswers`) reads the values of the template's fillable fields: plain text (a checkbox: `true`
+or `false`), to be checked with `prepare` and kept as the document's answers. Other fields the PDF
 may have are ignored.
 
 ---

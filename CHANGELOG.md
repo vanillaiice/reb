@@ -5,6 +5,15 @@ warning codes, the `.reb` language, and what templates compile and render to. Th
 [specification section 8.4](docs/specification.md#84-compatibility); `testdata/golden` shows each
 change to the output.
 
+## v0.7.0
+
+### Added
+
+- Fillable PDF fields (experimental, specification section 4.5): `fillable` on `<reb-checkbox>`.
+  In fillable mode it prints a framed square (`reb-field:NAME;checkbox`, class
+  `reb-fillable-checkbox`) that `rebc fillable` turns into a PDF check box, ticked when the answer
+  is; `rebc pdf-answers` reads it back as `true` or `false`.
+
 ## v0.6.0
 
 ### Added

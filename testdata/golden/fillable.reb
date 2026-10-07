@@ -1,5 +1,5 @@
 <!-- Fillable fields: rendered with "fillable": true they become empty boxes that rebpdf turns into
-     PDF text fields; otherwise they print their answers. -->
+     PDF text fields (a checkbox: a check box); otherwise they print their answers. -->
 <style>
   body { font-family: Arial, sans-serif; font-size: 14px; }
   .row { margin: 12px 0; }
@@ -13,6 +13,7 @@
 <div class="row">Supplier: <reb-text name="supplier" label="Supplier" fillable class="wide"></reb-text></div>
 <div class="row">Quantity: <reb-number name="quantity" label="Quantity" fillable></reb-number></div>
 <div class="row">Delivery date: <reb-date name="delivery" label="Delivery date" fillable></reb-date></div>
+<div class="row">Crane needed: <reb-checkbox name="crane" label="Crane needed" fillable></reb-checkbox></div>
 <div class="row">Priority: <reb-select name="priority" label="Priority" options="Normal,Urgent"></reb-select></div>
 
 <h2>Remarks</h2>
