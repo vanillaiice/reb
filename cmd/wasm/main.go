@@ -17,7 +17,7 @@
 //	                      (schema is the raw schema as a JSON string, as before; previewHtml is the
 //	                      template rendered with sample answers)
 //	__rebPrepare(json) {fields | schema, answers}                         -> {answers, errors} or {error}
-//	__rebRender(json)  {html, system, answers, assets, fields? | schema?} -> {html} or {error}
+//	__rebRender(json)  {html, system, answers, assets, fields? | schema?, fillable?} -> {html} or {error}
 //	__rebVersion()     -> the engine version
 package main
 
@@ -92,15 +92,16 @@ func prepare(input string) string {
 func render(input string) string {
 	var in struct {
 		rebdoc.SchemaInput
-		HTML    string            `json:"html"`
-		System  map[string]any    `json:"system"`
-		Answers map[string]any    `json:"answers"`
-		Assets  map[string]string `json:"assets"`
+		HTML     string            `json:"html"`
+		System   map[string]any    `json:"system"`
+		Answers  map[string]any    `json:"answers"`
+		Assets   map[string]string `json:"assets"`
+		Fillable bool              `json:"fillable"` // pdf-forms:boxes
 	}
 	if err := json.Unmarshal([]byte(input), &in); err != nil {
 		return marshal(map[string]any{"error": "invalid input: " + err.Error()})
 	}
-	html, err := rebrender.CompileHTML(in.HTML, rebdoc.BuildContext(in.System, in.Answers, in.Assets, in.Resolve()))
+	html, err := rebrender.CompileHTML(in.HTML, rebdoc.BuildContext(rebdoc.WithFillable(in.System, in.Fillable), in.Answers, in.Assets, in.Resolve()))
 	if err != nil {
 		return marshal(map[string]any{"error": err.Error()})
 	}

@@ -18,8 +18,10 @@ as a version. Consumers then move to that version. The format is described in
 ```
 cmd/rebc/              the JSON CLI
 cmd/wasm/              WebAssembly entry point for browsers (Studio, editor previews)
+cmd/wasmpdf/           the PDF form functions as a second, on-demand WebAssembly build
 internal/rebcompiler/  .reb source -> raw field schema + Go html/template
 internal/rebrender/    executes a compiled template against data (math, formatNumber, formatMoney, formatDate ...)
+internal/rebpdf/       fillable PDFs: printed fillable-field markers -> PDF text fields, and the answers typed back
 internal/rebdoc/       what consumers need around it: Compile (normalized schema, coded errors, warnings),
                        Prepare (answer validation, formulas, required/min/max/pattern, show-if),
                        BuildContext (system values, file names, text-area paragraphs), sample answers
@@ -50,8 +52,10 @@ Input always arrives as one JSON object on stdin, never as arguments.
 ```
 rebc compile    {"reb"}                                  -> {"schema", "fields", "html", "engineVersion", "warnings"}
 rebc prepare    {"fields" | "schema", "answers"}         -> {"answers", "errors"}
-rebc render     {"html", "system", "answers", "assets", "fields"? | "schema"?}  -> {"html"}
+rebc render     {"html", "system", "answers", "assets", "fields"? | "schema"?, "fillable"?}  -> {"html"}
 rebc normalize  {"schema"}                               -> {"schemaVersion", "fields"}
+rebc fillable   {"pdf", "answers"?}                      -> {"pdf"}
+rebc pdf-answers {"pdf", "fields" | "schema"}            -> {"answers"}
 rebc version                                             -> {"version"}
 
 errors          exit status 1, stdout {"error", "code"?, "params"?}
@@ -66,6 +70,13 @@ text, escaped where the template prints them; `safeHTML` prints one as HTML sani
 bluemonday's UGC policy.
 
 The WebAssembly build takes the same input for `__rebPrepare` and `__rebRender`.
+
+`render` takes `"fillable": true` to print fields marked `fillable` as empty boxes; print that page
+to PDF (Chromium), then `fillable` turns the boxes into PDF text fields, pre-filled with the answers
+given. `pdf-answers` reads the template's fillable fields back from a filled PDF (specification
+section 4.5). PDFs are base64 in the JSON. In a browser these two are `__rebFillable` and
+`__rebPdfAnswers`, in a separate build (`cmd/wasmpdf`, `rebpdf.wasm`): the PDF library (pdfcpu)
+would make the main build about 55% larger.
 
 ## Build and test
 
@@ -82,6 +93,7 @@ GOOS=js GOARCH=wasm go test -exec="bash $(go env GOROOT)/lib/wasm/go_js_wasm_exe
 
 CGO_ENABLED=0 go build -trimpath -o rebc ./cmd/rebc
 GOOS=js GOARCH=wasm go build -trimpath -ldflags="-s -w" -o rebcompiler.wasm ./cmd/wasm
+GOOS=js GOARCH=wasm go build -trimpath -ldflags="-s -w" -o rebpdf.wasm ./cmd/wasmpdf   # PDF forms, loaded on demand
 cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" .   # the loader the .wasm needs
 ```
 

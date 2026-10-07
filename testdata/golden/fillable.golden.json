@@ -1,0 +1,95 @@
+{
+  "compile": {
+    "engineVersion": "(the engine version)",
+    "fields": {
+      "fields": [
+        {
+          "fillable": true,
+          "key": "supplier",
+          "kind": "text",
+          "label": "Supplier",
+          "maxLength": 10000,
+          "type": "text"
+        },
+        {
+          "fillable": true,
+          "key": "quantity",
+          "kind": "number",
+          "label": "Quantity",
+          "type": "number"
+        },
+        {
+          "fillable": true,
+          "key": "delivery",
+          "kind": "date",
+          "label": "Delivery date",
+          "type": "date"
+        },
+        {
+          "key": "priority",
+          "kind": "select",
+          "label": "Priority",
+          "options": [
+            "Normal",
+            "Urgent"
+          ],
+          "type": "select"
+        },
+        {
+          "fillable": true,
+          "key": "remarks",
+          "kind": "textarea",
+          "label": "Remarks",
+          "maxLength": 50000,
+          "type": "textarea"
+        }
+      ],
+      "schemaVersion": 2
+    },
+    "schema": [
+      {
+        "fillable": true,
+        "key": "supplier",
+        "label": "Supplier",
+        "type": "text"
+      },
+      {
+        "fillable": true,
+        "key": "quantity",
+        "label": "Quantity",
+        "type": "number"
+      },
+      {
+        "fillable": true,
+        "key": "delivery",
+        "label": "Delivery date",
+        "type": "date"
+      },
+      {
+        "key": "priority",
+        "label": "Priority",
+        "options": [
+          "Normal",
+          "Urgent"
+        ],
+        "type": "select"
+      },
+      {
+        "fillable": true,
+        "key": "remarks",
+        "label": "Remarks",
+        "type": "textarea"
+      }
+    ],
+    "warnings": []
+  },
+  "prepare": {
+    "answers": {
+      "priority": "Urgent",
+      "quantity": "12",
+      "remarks": "Deliver to gate 3.\nCall ahead.",
+      "supplier": "Gulf Steel"
+    },
+    "errors": []
+  }
+}

@@ -9,4 +9,4 @@ package reb
 
 // Version is the engine release (its git tag). rebc version and the WebAssembly build report it, and
 // consumers store it with what they compiled. Bumped with gover (.gover).
-const Version = "v0.5.0"
+const Version = "v0.6.0"

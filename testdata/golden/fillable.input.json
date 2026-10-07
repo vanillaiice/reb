@@ -1,0 +1,10 @@
+{
+  "system": { "ReporterName": "Site office" },
+  "answers": {
+    "supplier": "Gulf Steel",
+    "quantity": 12,
+    "priority": "Urgent",
+    "remarks": "Deliver to gate 3.\nCall ahead."
+  },
+  "fillable": true
+}

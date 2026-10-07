@@ -92,6 +92,7 @@ type Field struct {
 	Step        string   `json:"step,omitempty"`
 	Pattern     string   `json:"pattern,omitempty"`
 	ShowIf      string   `json:"showIf,omitempty"`
+	Fillable    bool     `json:"fillable,omitempty"` // pdf-forms:boxes: typed into a PDF text field when rendered fillable
 }
 
 // Column is one column of a table field.
@@ -168,6 +169,7 @@ func build(entry rebcompiler.RebFieldSchema) Field {
 		Key: entry.Key, Type: entry.Type, Kind: kind, Label: entry.Label,
 		Required: entry.Required, Help: entry.Help, Placeholder: entry.Placeholder, Default: entry.Default,
 		Min: entry.Min, Max: entry.Max, Step: entry.Step, Pattern: entry.Pattern, ShowIf: entry.ShowIf,
+		Fillable: entry.Fillable, // pdf-forms:boxes
 	}
 	switch kind {
 	case KindTable:

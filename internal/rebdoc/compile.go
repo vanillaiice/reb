@@ -46,6 +46,7 @@ func (e *Error) Error() string { return e.Message }
 //	unknown_binding        {{.name}} that no field, system value or table column names {name, table?}
 //	unused_field           a field the template never prints, tests or reads in a show-if {field}
 //	duplicate_field        one name declared as fields of different kinds {field}
+//	fillable_ignored       (pdf-forms:boxes) the fillable attribute on a tag that cannot be fillable {field, tag}
 type Warning struct {
 	Code    string            `json:"code"`
 	Params  map[string]string `json:"params,omitempty"`

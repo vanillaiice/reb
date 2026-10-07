@@ -6,7 +6,10 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
+	"os"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -145,5 +148,26 @@ func TestRenderWithFieldsTurnsTextAreasIntoParagraphs(t *testing.T) {
 func TestVersion(t *testing.T) {
 	if out := runJSON(t, "version", map[string]any{}); !strings.HasPrefix(out["version"].(string), "v") {
 		t.Errorf("version = %v", out)
+	}
+}
+
+// pdf-forms:fields
+func TestFillableAndPDFAnswers(t *testing.T) {
+	form, err := os.ReadFile("../../internal/rebpdf/testdata/form.pdf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := runJSON(t, "fillable", map[string]any{"pdf": form, "answers": map[string]any{"supplier": "Gulf Steel"}})
+	pdf, err := base64.StdEncoding.DecodeString(result["pdf"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	compiled := runJSON(t, "compile", map[string]string{"reb": `<reb-text name="supplier" label="Supplier" fillable></reb-text>`})
+	answers := runJSON(t, "pdf-answers", map[string]any{"pdf": pdf, "fields": compiled["fields"]})["answers"]
+	if !reflect.DeepEqual(answers, map[string]any{"supplier": "Gulf Steel"}) {
+		t.Errorf("answers = %v", answers)
+	}
+	if _, err := run("pdf-answers", []byte(`{"pdf": ""}`)); err == nil {
+		t.Error("pdf-answers without a schema succeeded")
 	}
 }

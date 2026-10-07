@@ -12,6 +12,18 @@ import (
 	"strings"
 )
 
+// pdf-forms:boxes
+// WithFillable is the system values with Fillable set: true renders fillable fields as empty boxes
+// for a PDF form (specification section 4.5), false prints their answers.
+func WithFillable(system map[string]any, fillable bool) map[string]any {
+	out := make(map[string]any, len(system)+1)
+	for key, value := range system {
+		out[key] = value
+	}
+	out["Fillable"] = fillable
+	return out
+}
+
 // BuildContext is the data a compiled template executes against (spec section 5). It does not
 // change the maps it is given.
 //

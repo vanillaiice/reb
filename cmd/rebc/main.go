@@ -9,11 +9,15 @@
 //
 //	rebc compile    {"reb"}                                            -> {"schema", "fields", "html", "engineVersion", "warnings"}
 //	rebc prepare    {"fields" | "schema", "answers"}                   -> {"answers", "errors"}
-//	rebc render     {"html", "system", "answers", "assets", "fields"? | "schema"?} -> {"html"}
+//	rebc render     {"html", "system", "answers", "assets", "fields"? | "schema"?, "fillable"?} -> {"html"}
 //	rebc normalize  {"schema"}                                         -> {"schemaVersion", "fields"}
+//	rebc fillable   {"pdf", "answers"?}                                -> {"pdf"}
+//	rebc pdf-answers {"pdf", "fields" | "schema"}                      -> {"answers"}
 //	rebc version                                                       -> {"version"}
 //
-// "schema" is the compiler's raw schema, "fields" the normalized one (rebdoc.Schema). On failure rebc
+// "schema" is the compiler's raw schema, "fields" the normalized one (rebdoc.Schema). PDFs travel
+// base64-encoded: fillable turns a document printed with "fillable": true into a PDF form,
+// pdf-answers reads the template's fillable fields back from a filled one. On failure rebc
 // exits with status 1 and prints {"error", "code"?, "params"?}. Input always arrives on stdin, never
 // as arguments.
 package main
@@ -28,6 +32,7 @@ import (
 	"github.com/vanillaiice/reb"
 	"github.com/vanillaiice/reb/internal/rebcompiler"
 	"github.com/vanillaiice/reb/internal/rebdoc"
+	"github.com/vanillaiice/reb/internal/rebpdf"
 	"github.com/vanillaiice/reb/internal/rebrender"
 )
 
@@ -36,7 +41,7 @@ const maxInput = 32 << 20
 
 func main() {
 	if len(os.Args) != 2 {
-		fail(errors.New("usage: rebc compile|prepare|render|normalize|version < input.json"))
+		fail(errors.New("usage: rebc compile|prepare|render|normalize|fillable|pdf-answers|version < input.json"))
 	}
 	input, err := io.ReadAll(io.LimitReader(os.Stdin, maxInput+1))
 	if err != nil {
@@ -81,10 +86,14 @@ func run(command string, input []byte) ([]byte, error) {
 		return render(input)
 	case "normalize":
 		return normalize(input)
+	case "fillable": // pdf-forms:fields
+		return fillable(input)
+	case "pdf-answers": // pdf-forms:fields
+		return pdfAnswers(input)
 	case "version":
 		return json.Marshal(map[string]string{"version": reb.Version})
 	default:
-		return nil, fmt.Errorf("unknown command %q (use compile, prepare, render, normalize or version)", command)
+		return nil, fmt.Errorf("unknown command %q (use compile, prepare, render, normalize, fillable, pdf-answers or version)", command)
 	}
 }
 
@@ -127,15 +136,16 @@ func prepare(input []byte) ([]byte, error) {
 func render(input []byte) ([]byte, error) {
 	var in struct {
 		rebdoc.SchemaInput
-		HTML    string            `json:"html"`
-		System  map[string]any    `json:"system"`
-		Answers map[string]any    `json:"answers"`
-		Assets  map[string]string `json:"assets"`
+		HTML     string            `json:"html"`
+		System   map[string]any    `json:"system"`
+		Answers  map[string]any    `json:"answers"`
+		Assets   map[string]string `json:"assets"`
+		Fillable bool              `json:"fillable"` // pdf-forms:boxes
 	}
 	if err := decode(input, &in); err != nil {
 		return nil, err
 	}
-	html, err := rebrender.CompileHTML(in.HTML, rebdoc.BuildContext(in.System, in.Answers, in.Assets, in.Resolve()))
+	html, err := rebrender.CompileHTML(in.HTML, rebdoc.BuildContext(rebdoc.WithFillable(in.System, in.Fillable), in.Answers, in.Assets, in.Resolve()))
 	if err != nil {
 		return nil, err
 	}
@@ -150,4 +160,40 @@ func normalize(input []byte) ([]byte, error) {
 		return nil, err
 	}
 	return json.Marshal(rebdoc.Normalize(in.Schema))
+}
+
+// pdf-forms:fields
+func fillable(input []byte) ([]byte, error) {
+	var in struct {
+		PDF     []byte         `json:"pdf"`
+		Answers map[string]any `json:"answers"`
+	}
+	if err := decode(input, &in); err != nil {
+		return nil, err
+	}
+	pdf, err := rebpdf.Fillable(in.PDF, in.Answers)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(map[string][]byte{"pdf": pdf})
+}
+
+// pdf-forms:fields
+func pdfAnswers(input []byte) ([]byte, error) {
+	var in struct {
+		rebdoc.SchemaInput
+		PDF []byte `json:"pdf"`
+	}
+	if err := decode(input, &in); err != nil {
+		return nil, err
+	}
+	schema := in.Resolve()
+	if schema == nil {
+		return nil, errors.New("pdf-answers needs fields or schema")
+	}
+	answers, err := rebpdf.Answers(in.PDF, *schema)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(map[string]any{"answers": answers})
 }

@@ -5,6 +5,23 @@ warning codes, the `.reb` language, and what templates compile and render to. Th
 [specification section 8.4](docs/specification.md#84-compatibility); `testdata/golden` shows each
 change to the output.
 
+## v0.6.0
+
+### Added
+
+- **Fillable PDF fields** (specification section 4.5), **experimental**: outside the compatibility
+  promise, so a minor release may change or remove them. The `fillable` attribute on `<reb-text>`,
+  `<reb-number>`, `<reb-date>` and `<reb-textarea>` lets the answer be typed into the PDF.
+  `render` takes `"fillable": true` to print those fields as empty boxes (others keep their
+  answers); `rebc fillable` turns the boxes of the printed PDF into PDF text fields, and
+  `rebc pdf-answers` reads the template's fillable fields back from a filled PDF. In browsers they
+  are `__rebFillable` and `__rebPdfAnswers`, in a second build, `rebpdf.wasm` (`cmd/wasmpdf`).
+- `{{.Fillable}}`, a system value: true when the document is rendered fillable.
+- `fillable` in both schemas, and the warning `fillable_ignored` (`field`, `tag`) for the attribute
+  on a tag that cannot be filled.
+- `testdata/golden/fillable`: the golden harness renders a case in both modes when its input says
+  `"fillable": true` (`NAME.fillable.html`).
+
 ## v0.5.0
 
 The contract the engine will freeze as v1.0.0.

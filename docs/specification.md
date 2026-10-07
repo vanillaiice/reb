@@ -74,6 +74,9 @@ These change how the form asks for the answer; they do not change the PDF layout
 * **`pattern`**: a regular expression the whole text answer must match (as HTML's `pattern`).
 * **`show-if`**: the field is shown only while this condition holds (3.3). A hidden field's answer
   is not kept.
+* **`fillable`**: on `<reb-text>`, `<reb-number>`, `<reb-date>` and `<reb-textarea>`, the answer can
+  also be typed into the PDF (section 4.5). Elsewhere it has no effect and compiles with a
+  `fillable_ignored` warning.
 
 ### 3.3 `show-if` conditions
 A condition reads other fields' answers:
@@ -230,6 +233,39 @@ The PDF compiler registers custom Go template functions for complex layout formu
 </div>
 ```
 
+### 4.5 Fillable PDF fields
+**Experimental.** This section may change or be removed in a minor release (8.4); a consumer that
+uses it pins the engine release.
+
+A document can be rendered in one of two modes, chosen by the consumer each time it renders
+(`"fillable"` in the render input, section 8):
+
+* **with data** (the default): every field prints its answer, as above;
+* **fillable**: a field marked `fillable` prints an empty box instead of its answer, and the PDF
+  made from the page carries a text field over each box, so someone without Rebar can fill the PDF in
+  any PDF reader. Fields not marked `fillable` still print their answers, so a document can go out
+  half filled.
+
+In fillable mode, `<reb-text name="supplier" label="Supplier" fillable class="w-64" />` transpiles to
+a link whose target names the field:
+```html
+<a href="reb-field:supplier" class="reb-fillable w-64"></a>
+```
+(`reb-field:remarks;multiline` and the extra class `reb-fillable-multiline` for a text area). The
+compiled template holds both forms behind `{{if $.Fillable}}`. A built-in style, which any class
+the template sets overrides, makes the box an underlined `10em` wide line (a text area: a framed
+block the width of its container, `5em` high); size it with classes like any other element. A field
+printed twice gives two boxes of one PDF field, which share the value.
+
+Templates can test the mode themselves: `{{if .Fillable}}Fill in the boxes{{end}}`.
+
+Chromium flattens form inputs when it prints but keeps links, so the consumer turns the printed page
+into a form afterwards: `rebc fillable` (or `__rebFillable`) replaces each `reb-field:` link with a
+text field named after the field, pre-filled with the answers it is given. When the filled PDF comes
+back, `rebc pdf-answers` (or `__rebPdfAnswers`) reads the values of the template's fillable fields:
+plain text, to be checked with `prepare` and kept as the document's answers. Other fields the PDF
+may have are ignored.
+
 ---
 
 ## 5. Rendering documents
@@ -251,6 +287,7 @@ all (empty when it has none); an answer never overrides one.
 | `{{.OrganizationLogo}}` | its logo as an image source (`<img src="{{.OrganizationLogo}}">`), empty when there is none |
 | `{{.Attachments}}`, `{{.Photos}}` | the document's files (each with `.FileName`, `.ObjectKey` as image source) |
 | `{{.Answers}}` | all the answers, also available at the top level |
+| `{{.Fillable}}` | true when the document is rendered fillable (section 4.5); set by the engine |
 
 ### 5.2 Template assets
 A template may carry images (a logo, a stamp). It refers to them by bare file name,
@@ -349,14 +386,17 @@ Mutate the `<reb-*>` nodes in the AST in-place. Change the node tag to `span` (o
 
 The engine (this repository) is the only implementation of the rules above. Consumers call it as
 `rebc` (JSON on stdin and stdout) or as the WebAssembly build (`__rebCompile`, `__rebPrepare`,
-`__rebRender`, `__rebVersion`).
+`__rebRender`, `__rebVersion`). The PDF form functions of section 4.5 (`rebc fillable` and
+`pdf-answers`) are a second WebAssembly build, `rebpdf.wasm` (`__rebFillable`, `__rebPdfAnswers`),
+loaded only when needed. PDFs travel base64-encoded in the JSON.
 
 ### 8.1 Schemas
 `compile` returns two schemas. `schema` is the raw list the tags declared (`key`, `type`, `label`,
-`options` and the v1.1 attributes; schemaVersion 1, read by older clients). `fields` is the normalized
+`options`, the v1.1 attributes and `fillable`; schemaVersion 1, read by older clients). `fields` is the normalized
 schema, `{"schemaVersion": 2, "fields": [...]}`: each field has a `kind` (`section`, `text`,
 `number`, `date`, `textarea`, `select`, `checkbox`, `images`, `signature`, `table`; aliases such as
-`radio`, `string` and `photogrid` mapped, the declared `type` kept), a `maxLength` for text, and
+`radio`, `string` and `photogrid` mapped, the declared `type` kept), a `maxLength` for text,
+`fillable` when the field can be typed into the PDF (section 4.5), and
 tables have parsed `columns` (`key`, `kind`, `label`, `options`, `expression`, `precision`) with the
 columns declared inside them folded in. Consumers read `fields` and never parse options themselves.
 
@@ -376,6 +416,8 @@ the compiled template:
 * `duplicate_field` (`field`): one name declared as fields of different kinds; only the first
   declaration counts. Declaring the same field twice as the same kind is fine (it prints the answer
   twice).
+* `fillable_ignored` (`field`, `tag`): the `fillable` attribute on a tag that cannot be filled in a
+  PDF (only text, number, date and text area tags can).
 
 `prepare` (given the normalized `fields` or the raw `schema`) checks a document's answers and returns them cleaned, with formula and row-number cells
 computed and hidden fields dropped, plus a list of `{"key", "code", "params"}`: `invalid`,
@@ -399,6 +441,10 @@ Engine releases follow semantic versioning. The contract they version is:
 * what a template compiles and renders to: the cases in `testdata/golden` (each a `.reb` with its
   expected schema, compiled template and rendered document), `testdata/formula_cases.json` and
   `testdata/show_if_cases.json`.
+
+Section 4.5 (fillable PDF fields: the `fillable` attribute, `{{.Fillable}}`, the `fillable` render
+input, `rebc fillable`, `rebc pdf-answers`, `rebpdf.wasm` and the `fillable_ignored` warning) is
+experimental and outside this contract until a release says otherwise.
 
 The engine's Go packages (`internal/`) and the wording of messages (`error`, `message`; consumers
 translate by code) are not part of it.

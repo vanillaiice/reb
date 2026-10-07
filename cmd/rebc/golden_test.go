@@ -24,8 +24,9 @@ var update = flag.Bool("update", false, "rewrite the expected outputs in testdat
 //	NAME.golden.json     compile's output (html and engineVersion aside), or its error; with an
 //	                     input, prepare's output too
 //	NAME.compiled.html   the compiled template
-//	NAME.rendered.html   with NAME.input.json ({"system", "answers", "assets"}): the template
-//	                     rendered with the prepared answers
+//	NAME.rendered.html   with NAME.input.json ({"system", "answers", "assets", "fillable"?}): the
+//	                     template rendered with the prepared answers
+//	NAME.fillable.html   when the input says "fillable": true, the same rendered fillable
 //
 // After an intended change: go test ./cmd/rebc -update, and review the diff.
 func TestGolden(t *testing.T) {
@@ -66,9 +67,10 @@ func goldenOutputs(t *testing.T, source, base string) map[string][]byte {
 
 	if input, err := os.ReadFile(base + ".input.json"); err == nil {
 		var in struct {
-			System  map[string]any    `json:"system"`
-			Answers map[string]any    `json:"answers"`
-			Assets  map[string]string `json:"assets"`
+			System   map[string]any    `json:"system"`
+			Answers  map[string]any    `json:"answers"`
+			Assets   map[string]string `json:"assets"`
+			Fillable bool              `json:"fillable"`
 		}
 		if err := json.Unmarshal(input, &in); err != nil {
 			t.Fatal(err)
@@ -83,18 +85,25 @@ func goldenOutputs(t *testing.T, source, base string) map[string][]byte {
 		}
 		result["prepare"] = prepared
 
-		out, err = run("render", mustJSON(t, map[string]any{"html": html, "system": in.System, "answers": prepared["answers"],
-			"assets": in.Assets, "fields": compiled["fields"]}))
-		if err != nil {
-			t.Fatalf("render: %v", err)
+		// pdf-forms:boxes: the .fillable.html output
+		modes := map[bool]string{false: ".rendered.html"}
+		if in.Fillable {
+			modes[true] = ".fillable.html"
 		}
-		var rendered struct {
-			HTML string `json:"html"`
+		for fillable, suffix := range modes {
+			out, err = run("render", mustJSON(t, map[string]any{"html": html, "system": in.System, "answers": prepared["answers"],
+				"assets": in.Assets, "fields": compiled["fields"], "fillable": fillable}))
+			if err != nil {
+				t.Fatalf("render: %v", err)
+			}
+			var rendered struct {
+				HTML string `json:"html"`
+			}
+			if err := json.Unmarshal(out, &rendered); err != nil {
+				t.Fatal(err)
+			}
+			outputs[suffix] = []byte(rendered.HTML + "\n")
 		}
-		if err := json.Unmarshal(out, &rendered); err != nil {
-			t.Fatal(err)
-		}
-		outputs[".rendered.html"] = []byte(rendered.HTML + "\n")
 	}
 	outputs[".golden.json"] = indentJSON(t, mustJSON(t, result))
 	return outputs

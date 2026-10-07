@@ -36,6 +36,32 @@ var (
 	action            = regexp.MustCompile(`(?s)\{\{.*?\}\}`)
 )
 
+// pdf-forms:boxes (see ../docs/pdf-forms.md in the Rebar folder to remove).
+// FillableScheme starts the link a fillable field prints as when a document is rendered fillable:
+// "reb-field:NAME", or "reb-field:NAME;multiline" for a text area. Chromium keeps it as a link
+// annotation over the field's box, which rebpdf replaces with a text field.
+const (
+	FillableScheme    = "reb-field:"
+	FillableMultiline = ";multiline"
+)
+
+// FillableMarker is the link target of a fillable field.
+func FillableMarker(name string, multiline bool) string {
+	if multiline {
+		return FillableScheme + name + FillableMultiline
+	}
+	return FillableScheme + name
+}
+
+// fillableTypes are the tags whose answer can be typed into a PDF text field (the fillable attribute).
+var fillableTypes = map[string]bool{"text": true, "number": true, "date": true, "textarea": true}
+
+// CanBeFillable reports whether a <reb-TYPE> tag takes the fillable attribute.
+func CanBeFillable(rebType string) bool { return fillableTypes[rebType] }
+
+// fillableCSS sizes the boxes of fillable fields; :where() keeps it below any class the template sets.
+const fillableCSS = `:where(.reb-fillable){display:inline-block;min-width:10em;height:1.3em;vertical-align:bottom;border-bottom:1px solid currentColor;color:inherit;text-decoration:none}:where(.reb-fillable-multiline){display:block;width:100%;height:5em;border:1px solid currentColor}`
+
 // RebFieldSchema is one declared field, as the tag wrote it (the "raw" schema, schemaVersion 1, which
 // the Go API and the mobile app read). rebdoc.Normalize turns it into typed fields.
 type RebFieldSchema struct {
@@ -54,6 +80,7 @@ type RebFieldSchema struct {
 	Step        string `json:"step,omitempty"`
 	Pattern     string `json:"pattern,omitempty"`
 	ShowIf      string `json:"showIf,omitempty"`
+	Fillable    bool   `json:"fillable,omitempty"` // pdf-forms:boxes
 }
 
 // Error is a compile error a caller can translate: Code names the problem, Params fill the message.
@@ -88,6 +115,7 @@ func Compile(rawHTML string) ([]RebFieldSchema, string, error) {
 
 	schema := []RebFieldSchema{}
 	var walkErr error
+	fillableStyled := false // pdf-forms:boxes
 
 	getAttr := func(n *html.Node, key string) string {
 		for _, attr := range n.Attr {
@@ -174,6 +202,7 @@ func Compile(rawHTML string) ([]RebFieldSchema, string, error) {
 					Step:        strings.TrimSpace(getAttr(n, "step")),
 					Pattern:     getAttr(n, "pattern"),
 					ShowIf:      strings.TrimSpace(getAttr(n, "show-if")),
+					Fillable:    hasFlag(n, "fillable") && fillableTypes[rebType], // pdf-forms:boxes
 				}
 
 				if opts := getAttr(n, "options"); opts != "" {
@@ -260,6 +289,8 @@ func Compile(rawHTML string) ([]RebFieldSchema, string, error) {
 			}
 
 			class := getAttr(n, "class")
+			// pdf-forms:boxes
+			fillable := name != "" && hasFlag(n, "fillable") && fillableTypes[rebType]
 
 			// Transform node in-place
 			n.Data = "span"
@@ -313,6 +344,37 @@ func Compile(rawHTML string) ([]RebFieldSchema, string, error) {
 					n.AppendChild(&html.Node{Type: html.TextNode, Data: `{{.` + name + ` | safeHTML}}`})
 				} else {
 					n.AppendChild(&html.Node{Type: html.TextNode, Data: `{{.` + name + `}}`})
+				}
+			}
+
+			// pdf-forms:boxes: a fillable field prints, when the document is rendered fillable, an empty box linking
+			// to its marker instead of the answer; rebpdf turns the link into a PDF text field.
+			if fillable {
+				if !fillableStyled {
+					fillableStyled = true
+					style := &html.Node{Type: html.ElementNode, Data: "style", DataAtom: atom.Style}
+					style.AppendChild(&html.Node{Type: html.RawNode, Data: fillableCSS})
+					n.Parent.InsertBefore(style, n)
+				}
+				boxClass := "reb-fillable"
+				if rebType == "textarea" {
+					boxClass += " reb-fillable-multiline"
+				}
+				if class != "" {
+					boxClass += " " + class
+				}
+				box := &html.Node{Type: html.ElementNode, Data: "a", DataAtom: atom.A, Attr: []html.Attribute{
+					{Key: "href", Val: FillableMarker(name, rebType == "textarea")},
+					{Key: "class", Val: boxClass},
+				}}
+				n.Parent.InsertBefore(&html.Node{Type: html.TextNode, Data: `{{if $.Fillable}}`}, n)
+				n.Parent.InsertBefore(box, n)
+				n.Parent.InsertBefore(&html.Node{Type: html.TextNode, Data: `{{else}}`}, n)
+				end := &html.Node{Type: html.TextNode, Data: `{{end}}`}
+				if n.NextSibling != nil {
+					n.Parent.InsertBefore(end, n.NextSibling)
+				} else {
+					n.Parent.AppendChild(end)
 				}
 			}
 		}

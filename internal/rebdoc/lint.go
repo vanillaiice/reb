@@ -12,6 +12,7 @@ import (
 
 	"golang.org/x/net/html"
 
+	"github.com/vanillaiice/reb/internal/rebcompiler"
 	"github.com/vanillaiice/reb/internal/rebrender"
 )
 
@@ -19,6 +20,7 @@ import (
 var SystemValues = []string{
 	"ID", "Name", "Number", "Reference", "ProjectName", "ReporterName", "TemplateName", "CreatedAt",
 	"OrganizationName", "OrganizationLogo", "Attachments", "Photos", "Answers",
+	"Fillable", // pdf-forms:boxes
 }
 
 // lint reads what a compiled template prints and reports (specification section 8.2):
@@ -26,6 +28,7 @@ var SystemValues = []string{
 //	unknown_binding  {{.name}} where no field, system value or (inside a table's rows) column is named so
 //	unused_field     a field the template never prints, tests or reads from a show-if
 //	duplicate_field  one name declared as fields of different kinds
+//	fillable_ignored the fillable attribute on a tag that cannot be fillable
 func lint(source, compiled string, schema Schema) []Warning {
 	tree, err := rebrender.Tree(compiled)
 	if err != nil || tree == nil || tree.Root == nil {
@@ -67,7 +70,43 @@ func lint(source, compiled string, schema Schema) []Warning {
 		l.warn(Warning{Code: "duplicate_field", Params: map[string]string{"field": name},
 			Message: name + " is declared more than once as different kinds of field; only the first counts"})
 	}
+	for _, tag := range ignoredFillable(source) { // pdf-forms:boxes
+		l.warn(Warning{Code: "fillable_ignored", Params: map[string]string{"field": tag[0], "tag": tag[1]},
+			Message: "fillable has no effect on <" + tag[1] + "> (" + tag[0] + "): only text, number, date and text area tags can be filled in a PDF"})
+	}
 	return l.warnings
+}
+
+// pdf-forms:boxes
+// ignoredFillable finds the fillable attribute on tags that cannot be fillable, as [name, tag] pairs.
+func ignoredFillable(source string) [][2]string {
+	root, err := html.Parse(strings.NewReader(source))
+	if err != nil {
+		return nil
+	}
+	var found [][2]string
+	var visit func(*html.Node)
+	visit = func(n *html.Node) {
+		if n.Type == html.ElementNode && strings.HasPrefix(n.Data, "reb-") && !rebcompiler.CanBeFillable(strings.TrimPrefix(n.Data, "reb-")) {
+			name, fillable := "", false
+			for _, attr := range n.Attr {
+				switch attr.Key {
+				case "name":
+					name = strings.TrimSpace(attr.Val)
+				case "fillable":
+					fillable = !strings.EqualFold(strings.TrimSpace(attr.Val), "false")
+				}
+			}
+			if fillable {
+				found = append(found, [2]string{name, n.Data})
+			}
+		}
+		for child := n.FirstChild; child != nil; child = child.NextSibling {
+			visit(child)
+		}
+	}
+	visit(root)
+	return found
 }
 
 // scope is what the dot holds: the root (answers and system values), the rows of one table, or

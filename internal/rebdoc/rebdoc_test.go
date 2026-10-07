@@ -375,3 +375,33 @@ func TestPrepareNamesTheCellOfAnError(t *testing.T) {
 		t.Errorf("errors = %+v", prepared.Errors)
 	}
 }
+
+// pdf-forms:boxes
+func TestFillableFields(t *testing.T) {
+	compiled, err := Compile(`<reb-text name="client" label="Client" fillable></reb-text>
+		<reb-photogrid name="photos" label="Photos" fillable></reb-photogrid>{{if .Fillable}}Fill in the boxes{{end}}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !compiled.Fields.Fields[0].Fillable || compiled.Fields.Fields[1].Fillable {
+		t.Errorf("fields = %+v", compiled.Fields.Fields)
+	}
+	if len(compiled.Warnings) != 1 || compiled.Warnings[0].Code != "fillable_ignored" ||
+		compiled.Warnings[0].Params["field"] != "photos" || compiled.Warnings[0].Params["tag"] != "reb-photogrid" {
+		t.Errorf("warnings = %+v, want fillable_ignored on photos", compiled.Warnings)
+	}
+
+	answers := map[string]any{"client": "ACME"}
+	for fillable, want := range map[bool]string{
+		false: `<span>ACME</span>`,
+		true:  `<a href="reb-field:client" class="reb-fillable"></a>`,
+	} {
+		html, err := rebrender.CompileHTML(compiled.HTML, BuildContext(WithFillable(nil, fillable), answers, nil, &compiled.Fields))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(html, want) || strings.Contains(html, "Fill in the boxes") != fillable {
+			t.Errorf("fillable %v rendered:\n%s", fillable, html)
+		}
+	}
+}
