@@ -419,7 +419,7 @@ the compiled template:
   declaration counts. Declaring the same field twice as the same kind is fine (it prints the answer
   twice).
 * `fillable_ignored` (`field`, `tag`): the `fillable` attribute on a tag that cannot be filled in a
-  PDF (only text, number, date and text area tags can).
+  PDF (only text, number, date, text area and checkbox tags can).
 
 `prepare` (given the normalized `fields` or the raw `schema`) checks a document's answers and returns them cleaned, with formula and row-number cells
 computed and hidden fields dropped, plus a list of `{"key", "code", "params"}`: `invalid`,
