@@ -21,6 +21,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"syscall/js"
 
 	"github.com/vanillaiice/reb/internal/rebdoc"
@@ -64,7 +65,10 @@ func pdfAnswers(input string) string {
 	if err := json.Unmarshal([]byte(input), &in); err != nil {
 		return marshal(map[string]any{"error": "invalid input: " + err.Error()})
 	}
-	schema := in.Resolve()
+	schema, err := in.Resolve()
+	if err != nil {
+		return failure(err)
+	}
 	if schema == nil {
 		return marshal(map[string]any{"error": "pdf-answers needs fields or schema"})
 	}
@@ -73,6 +77,15 @@ func pdfAnswers(input string) string {
 		return marshal(map[string]any{"error": err.Error()})
 	}
 	return marshal(map[string]any{"answers": answers})
+}
+
+// failure is an error as {error, code?, params?}.
+func failure(err error) string {
+	var coded *rebdoc.Error
+	if errors.As(err, &coded) {
+		return marshal(map[string]any{"error": coded.Message, "code": coded.Code, "params": coded.Params})
+	}
+	return marshal(map[string]any{"error": err.Error()})
 }
 
 func marshal(value any) string {

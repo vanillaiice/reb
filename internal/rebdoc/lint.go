@@ -227,17 +227,18 @@ func (l *linter) name(name string, s scope) {
 }
 
 // conflictingDeclarations finds names declared by <reb-*> tags as different kinds of field. The same
-// name declared twice as the same kind is fine: a template may print one answer in two places.
+// name declared twice as the same kind is fine: a template may print one answer in two places. A tag
+// inside a <reb-table> named after one of its columns declares the column, not a field.
 func conflictingDeclarations(source string) []string {
 	root, err := html.Parse(strings.NewReader(source))
 	if err != nil {
 		return nil
 	}
 	kinds := map[string]map[string]bool{}
-	var visit func(*html.Node)
-	visit = func(n *html.Node) {
+	var visit func(*html.Node, map[string]bool)
+	visit = func(n *html.Node, columns map[string]bool) {
 		if n.Type == html.ElementNode && strings.HasPrefix(n.Data, "reb-") {
-			name, declared := "", strings.TrimPrefix(n.Data, "reb-")
+			name, declared, options := "", strings.TrimPrefix(n.Data, "reb-"), ""
 			for _, attr := range n.Attr {
 				switch attr.Key {
 				case "name":
@@ -246,12 +247,14 @@ func conflictingDeclarations(source string) []string {
 					if declared == "declare" {
 						declared = strings.TrimSpace(attr.Val)
 					}
+				case "options":
+					options = attr.Val
 				}
 			}
 			if declared == "declare" {
 				declared = "text"
 			}
-			if name != "" && declared != "section" {
+			if name != "" && declared != "section" && !(declared != "table" && columns[name]) {
 				kind, ok := fieldKinds[declared]
 				if !ok {
 					kind = KindText
@@ -261,12 +264,18 @@ func conflictingDeclarations(source string) []string {
 				}
 				kinds[name][kind] = true
 			}
+			if declared == "table" {
+				columns = map[string]bool{}
+				for _, column := range ParseColumns(strings.Split(options, ",")) {
+					columns[column.Key] = true
+				}
+			}
 		}
 		for child := n.FirstChild; child != nil; child = child.NextSibling {
-			visit(child)
+			visit(child, columns)
 		}
 	}
-	visit(root)
+	visit(root, nil)
 	var conflicts []string
 	for name, set := range kinds {
 		if len(set) > 1 {

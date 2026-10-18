@@ -8,6 +8,7 @@ package rebdoc
 import (
 	"errors"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/vanillaiice/reb"
@@ -30,6 +31,8 @@ type Compiled struct {
 //	invalid_show_if     a show-if condition that does not parse {field, detail}
 //	invalid_pattern     a pattern that is not a valid regular expression {field}
 //	syntax              Go template syntax that could never render {detail}
+//	invalid_schema      a schema given as JSON that Schema.Validate refuses {detail}
+//	output_too_large    a render that would print more than {count} bytes (Render)
 //	invalid             anything else {detail}
 type Error struct {
 	Code    string            `json:"code"`
@@ -46,6 +49,7 @@ func (e *Error) Error() string { return e.Message }
 //	unknown_binding        {{.name}} that no field, system value or table column names {name, table?}
 //	unused_field           a field the template never prints, tests or reads in a show-if {field}
 //	duplicate_field        one name declared as fields of different kinds {field}
+//	column_shadows_field   a table column named like a top-level field, which its rows reach only as {{$.name}} {field, table}
 //	fillable_ignored       (pdf-forms:boxes) the fillable attribute on a tag that cannot be fillable {field, tag}
 type Warning struct {
 	Code    string            `json:"code"`
@@ -101,6 +105,40 @@ func Compile(source string) (*Compiled, error) {
 				Message: field.Key + " has no label"})
 		}
 	}
+	compiled.Warnings = append(compiled.Warnings, shadowedFields(fields)...)
 	compiled.Warnings = append(compiled.Warnings, lint(source, html, fields)...)
 	return compiled, nil
+}
+
+// Render executes a compiled template with a context from BuildContext, as rebrender.CompileHTML does;
+// output past rebrender.MaxOutput is an output_too_large error.
+func Render(html string, context map[string]any) (string, error) {
+	out, err := rebrender.CompileHTML(html, context)
+	if errors.Is(err, rebrender.ErrOutputTooLarge) {
+		count := strconv.Itoa(rebrender.MaxOutput)
+		return "", &Error{Code: "output_too_large", Params: map[string]string{"count": count},
+			Message: "the document would be larger than " + count + " bytes"}
+	}
+	return out, err
+}
+
+// shadowedFields warns of a table column named like a top-level field: inside the table's rows the
+// name reads the column, and only {{$.name}} reaches the field.
+func shadowedFields(schema Schema) []Warning {
+	topLevel := map[string]bool{}
+	for _, field := range schema.Fields {
+		if field.Kind != KindTable {
+			topLevel[field.Key] = true
+		}
+	}
+	var warnings []Warning
+	for _, table := range schema.Fields {
+		for _, column := range table.Columns {
+			if topLevel[column.Key] {
+				warnings = append(warnings, Warning{Code: "column_shadows_field", Params: map[string]string{"field": column.Key, "table": table.Key},
+					Message: "the table " + table.Key + " has a column named like the field " + column.Key + "; inside its rows {{." + column.Key + "}} is the column and {{$." + column.Key + "}} the field"})
+			}
+		}
+	}
+	return warnings
 }

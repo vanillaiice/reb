@@ -1,0 +1,17 @@
+<span>{{.qty}}</span>
+<span>{{.site}}</span>
+
+<div>
+  
+  <table>
+    <tbody>{{range .materials}}<tr><td>{{.item}}</td><td>{{.qty}}</td></tr>{{end}}
+  </tbody></table>
+</div>
+
+<div>
+  <table>
+    <tbody>{{range .labour}}<tr><td>{{.item}}</td><td>{{.hours}}</td></tr>{{end}}
+  </tbody></table>
+</div>
+
+<p>{{.site}}: {{.qty}} in all</p>

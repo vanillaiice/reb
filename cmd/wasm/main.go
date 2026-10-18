@@ -28,7 +28,6 @@ import (
 
 	"github.com/vanillaiice/reb"
 	"github.com/vanillaiice/reb/internal/rebdoc"
-	"github.com/vanillaiice/reb/internal/rebrender"
 )
 
 func main() {
@@ -64,7 +63,7 @@ func compile(source string) string {
 	}
 
 	context := rebdoc.BuildContext(rebdoc.SampleSystem(), rebdoc.SampleAnswers(compiled.Fields), nil, &compiled.Fields)
-	if preview, err := rebrender.CompileHTML(compiled.HTML, context); err != nil {
+	if preview, err := rebdoc.Render(compiled.HTML, context); err != nil {
 		// Fall back to the compiled HTML so the author still sees the structure.
 		out["execError"] = err.Error()
 		out["previewHtml"] = compiled.HTML
@@ -82,7 +81,10 @@ func prepare(input string) string {
 	if err := json.Unmarshal([]byte(input), &in); err != nil {
 		return marshal(map[string]any{"error": "invalid input: " + err.Error()})
 	}
-	schema := in.Resolve()
+	schema, err := in.Resolve()
+	if err != nil {
+		return failure(err)
+	}
 	if schema == nil {
 		return marshal(map[string]any{"error": "prepare needs fields or schema"})
 	}
@@ -101,11 +103,24 @@ func render(input string) string {
 	if err := json.Unmarshal([]byte(input), &in); err != nil {
 		return marshal(map[string]any{"error": "invalid input: " + err.Error()})
 	}
-	html, err := rebrender.CompileHTML(in.HTML, rebdoc.BuildContext(rebdoc.WithFillable(in.System, in.Fillable), in.Answers, in.Assets, in.Resolve()))
+	schema, err := in.Resolve()
 	if err != nil {
-		return marshal(map[string]any{"error": err.Error()})
+		return failure(err)
+	}
+	html, err := rebdoc.Render(in.HTML, rebdoc.BuildContext(rebdoc.WithFillable(in.System, in.Fillable), in.Answers, in.Assets, schema))
+	if err != nil {
+		return failure(err)
 	}
 	return marshal(map[string]any{"html": html})
+}
+
+// failure is an error as {error, code?, params?}.
+func failure(err error) string {
+	var coded *rebdoc.Error
+	if errors.As(err, &coded) {
+		return marshal(map[string]any{"error": coded.Message, "code": coded.Code, "params": coded.Params})
+	}
+	return marshal(map[string]any{"error": err.Error()})
 }
 
 func marshal(value any) string {

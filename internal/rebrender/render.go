@@ -11,6 +11,7 @@ package rebrender
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"strconv"
@@ -80,21 +81,22 @@ func isInt(v any) bool {
 	return false
 }
 
-// formatNumber renders v with a fixed number of decimals. It accepts both the
-// pipeline form {{sumColumn .rows "amount" | formatNumber 2}} (decimals first)
-// and the form documented in the .reb spec, {{formatNumber .val 2}} (decimals
-// last), which used to abort the whole render with a type error.
+// formatNumber renders a value with a fixed number of decimals, in the form documented in the .reb
+// spec, {{formatNumber .val 2}} (value first), and in the pipeline form
+// {{sumColumn .rows "amount" | formatNumber 2}}, where the value comes last. The pipeline form is
+// recognized by an integer first argument and a non-integer second; with two integers the value comes
+// first, so an integer pipeline is written {{formatNumber (len .rows) 0}}.
 func formatNumber(a, b any) string {
-	decimals, value := a, b
-	if isInt(b) && !isInt(a) {
-		decimals, value = b, a
+	value, decimals := a, b
+	if isInt(a) && !isInt(b) {
+		value, decimals = b, a
 	}
-	d := int(toFloat(decimals))
-	if d < 0 {
-		d = 0
-	} else if d > 20 {
-		d = 20
-	}
+	return fixed(value, decimals)
+}
+
+// fixed renders value with decimals digits after the point (0..20).
+func fixed(value, decimals any) string {
+	d := min(max(int(toFloat(decimals)), 0), 20)
 	return strconv.FormatFloat(toFloat(value), 'f', d, 64)
 }
 
@@ -107,7 +109,7 @@ func formatMoney(a, b, c any) string {
 	if isInt(b) {
 		currency, decimals, value = a, b, c
 	}
-	number := formatNumber(value, decimals)
+	number := fixed(value, decimals)
 	sign := ""
 	if strings.HasPrefix(number, "-") {
 		sign, number = "-", number[1:]
@@ -149,15 +151,43 @@ func safeHTML(value any) template.HTML {
 	return template.HTML(sanitizer.Sanitize(fmt.Sprint(value)))
 }
 
-// CompileHTML parses the raw template HTML markup and executes it with the provided custom context data, returning the final output string.
+// MaxOutput bounds what one render writes: a template can loop ({{range 100000000}}), so its output
+// is not bounded by its input. Real documents are far smaller (files are referenced, not inlined).
+const MaxOutput = 64 << 20
+
+// ErrOutputTooLarge is a render stopped at MaxOutput bytes.
+var ErrOutputTooLarge = errors.New("the document is larger than the render limit")
+
+// cappedBuffer refuses a write that would take it past its limit, which stops the template.
+type cappedBuffer struct {
+	bytes.Buffer
+	limit int
+}
+
+func (b *cappedBuffer) Write(p []byte) (int, error) {
+	if b.Len()+len(p) > b.limit {
+		return 0, ErrOutputTooLarge
+	}
+	return b.Buffer.Write(p)
+}
+
+// CompileHTML parses the raw template HTML markup and executes it with the provided custom context
+// data, returning the final output string; output past MaxOutput stops it with ErrOutputTooLarge.
 func CompileHTML(htmlContent string, data any) (string, error) {
+	return compileHTML(htmlContent, data, MaxOutput)
+}
+
+func compileHTML(htmlContent string, data any, limit int) (string, error) {
 	tmpl, err := parse(htmlContent)
 	if err != nil {
 		return "", err
 	}
 
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
+	buf := &cappedBuffer{limit: limit}
+	if err := tmpl.Execute(buf, data); err != nil {
+		if errors.Is(err, ErrOutputTooLarge) {
+			return "", ErrOutputTooLarge
+		}
 		return "", err
 	}
 

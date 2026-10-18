@@ -28,6 +28,15 @@ const (
 	MaxRows          = 500    // rows in a table
 	MaxImages        = 100    // files in a photo grid
 	DefaultPrecision = 2      // decimals of a formula column without |N
+	MaxPrecision     = 10     // decimals of a formula column at most
+)
+
+// Budgets a schema given as JSON must fit (Schema.Validate); a compiled template is far below them.
+const (
+	MaxFields     = 2_000 // fields of a schema
+	MaxColumns    = 200   // columns of a table
+	MaxOptions    = 1_000 // choices of a select field or column
+	MaxExpression = 1_000 // characters of a formula expression
 )
 
 // Field kinds. Aliases map onto them ("string" is text, "radio" a select shown as radio buttons,
@@ -112,14 +121,71 @@ type SchemaInput struct {
 	Schema []rebcompiler.RebFieldSchema `json:"schema"`
 }
 
-// Resolve is the normalized schema given, else the raw one normalized, else nil.
-func (s SchemaInput) Resolve() *Schema {
-	if s.Fields != nil {
-		return s.Fields
-	}
-	if s.Schema != nil {
+// Resolve is the normalized schema given, else the raw one normalized, else nil; a schema that does
+// not pass Validate is an invalid_schema error.
+func (s SchemaInput) Resolve() (*Schema, error) {
+	schema := s.Fields
+	if schema == nil && s.Schema != nil {
 		normalized := Normalize(s.Schema)
-		return &normalized
+		schema = &normalized
+	}
+	if schema == nil {
+		return nil, nil
+	}
+	if err := schema.Validate(); err != nil {
+		return nil, err
+	}
+	return schema, nil
+}
+
+// Validate checks a schema that arrived as JSON rather than from Normalize: its version, every
+// field and column kind, formula precision and the size budgets above.
+func (s Schema) Validate() error {
+	invalid := func(detail string) error {
+		return &Error{Code: "invalid_schema", Params: map[string]string{"detail": detail}, Message: "invalid schema: " + detail}
+	}
+	if s.Version != SchemaVersion {
+		return invalid("schemaVersion " + strconv.Itoa(s.Version) + " is not " + strconv.Itoa(SchemaVersion))
+	}
+	if len(s.Fields) > MaxFields {
+		return invalid("more than " + strconv.Itoa(MaxFields) + " fields")
+	}
+	kinds := map[string]bool{}
+	for _, kind := range fieldKinds {
+		kinds[kind] = true
+	}
+	columnKindSet := map[string]bool{}
+	for _, kind := range columnKinds {
+		columnKindSet[kind] = true
+	}
+	for _, field := range s.Fields {
+		if strings.TrimSpace(field.Key) == "" {
+			return invalid("a field without a key")
+		}
+		if !kinds[field.Kind] {
+			return invalid(field.Key + " has the unknown kind " + strconv.Quote(field.Kind))
+		}
+		if len(field.Options) > MaxOptions {
+			return invalid(field.Key + " has more than " + strconv.Itoa(MaxOptions) + " options")
+		}
+		if len(field.Columns) > MaxColumns {
+			return invalid(field.Key + " has more than " + strconv.Itoa(MaxColumns) + " columns")
+		}
+		for _, column := range field.Columns {
+			where := field.Key + "." + column.Key
+			switch {
+			case strings.TrimSpace(column.Key) == "":
+				return invalid("a column of " + field.Key + " without a key")
+			case !columnKindSet[column.Kind]:
+				return invalid(where + " has the unknown kind " + strconv.Quote(column.Kind))
+			case len(column.Options) > MaxOptions:
+				return invalid(where + " has more than " + strconv.Itoa(MaxOptions) + " options")
+			case len(column.Expression) > MaxExpression:
+				return invalid(where + " has a formula longer than " + strconv.Itoa(MaxExpression) + " characters")
+			case column.Precision != nil && (*column.Precision < 0 || *column.Precision > MaxPrecision):
+				return invalid(where + " has a precision outside 0.." + strconv.Itoa(MaxPrecision))
+			}
+		}
 	}
 	return nil
 }
@@ -130,29 +196,14 @@ func (f Field) Stored() bool { return f.Kind != KindSection }
 // Computed reports whether the column's cells are computed rather than typed.
 func (c Column) Computed() bool { return c.Kind == ColumnFormula || c.Kind == ColumnAutoincrement }
 
-// Normalize types the compiler's raw schema. Entries without a key are ignored; columns declared
-// with <reb-declare> inside a table also appear as top-level entries and are answered per row, so
-// they are dropped from the top level.
+// Normalize types the compiler's raw schema. Entries without a key are ignored; a tag inside a table
+// that declares one of its columns (marked with its table by the compiler) is answered per row, so it
+// is dropped from the top level, while a top-level field of the same name stays. A raw schema from
+// before v0.8.0 has no marks, so all its entries are top-level.
 func Normalize(raw []rebcompiler.RebFieldSchema) Schema {
-	var entries []rebcompiler.RebFieldSchema
-	for _, entry := range raw {
-		if strings.TrimSpace(entry.Key) != "" {
-			entries = append(entries, entry)
-		}
-	}
-
-	columnKeys := map[string]bool{}
-	for _, entry := range entries {
-		if entry.Type == "table" {
-			for _, column := range ParseColumns(entry.Options) {
-				columnKeys[column.Key] = true
-			}
-		}
-	}
-
 	schema := Schema{Version: SchemaVersion, Fields: []Field{}}
-	for _, entry := range entries {
-		if entry.Type != "table" && columnKeys[entry.Key] {
+	for _, entry := range raw {
+		if strings.TrimSpace(entry.Key) == "" || entry.Table != "" {
 			continue
 		}
 		schema.Fields = append(schema.Fields, build(entry))
@@ -210,7 +261,7 @@ func ParseColumns(options []string) []Column {
 			precision := DefaultPrecision
 			if hasPrecision {
 				if n, err := strconv.Atoi(strings.TrimSpace(precisionText)); err == nil {
-					precision = min(max(n, 0), 10)
+					precision = min(max(n, 0), MaxPrecision)
 				}
 			}
 			column.Kind, column.Expression, column.Precision = ColumnFormula, expression, &precision

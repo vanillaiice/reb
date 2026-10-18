@@ -1,0 +1,16 @@
+{
+  "comment": "Whole-form show-if visibility (docs/specification.md section 3.3): every field starts visible; each pass evaluates every condition against the answers of the fields visible at the start of the pass and sets each field visible or hidden; passes stop when nothing changes, after at most one more pass than the form has fields (sections included). visible lists the stored fields left visible, in form order. Every evaluator runs these: rebdoc (Go), the mobile app and Rails.",
+  "cases": [
+    {"answers": {"a": "x", "b": "y", "gate": false}, "fields": [{"key": "gate", "kind": "checkbox"}, {"key": "a", "kind": "text", "showIf": "gate"}, {"key": "b", "kind": "text", "showIf": "a"}], "name": "a chain hidden at its root", "visible": ["gate"]},
+    {"answers": {"a": "x", "b": "y", "gate": true}, "fields": [{"key": "gate", "kind": "checkbox"}, {"key": "a", "kind": "text", "showIf": "gate"}, {"key": "b", "kind": "text", "showIf": "a"}], "name": "a chain shown", "visible": ["gate", "a", "b"]},
+    {"answers": {"a": "old", "b": "keep", "switch": false}, "fields": [{"key": "switch", "kind": "checkbox"}, {"key": "a", "kind": "text", "showIf": "switch"}, {"key": "b", "kind": "text", "showIf": "not a"}], "name": "negation of a hidden field", "visible": ["switch", "b"]},
+    {"answers": {"a": "old", "b": "keep", "switch": true}, "fields": [{"key": "switch", "kind": "checkbox"}, {"key": "a", "kind": "text", "showIf": "switch"}, {"key": "b", "kind": "text", "showIf": "not a"}], "name": "negation of a visible field", "visible": ["switch", "a"]},
+    {"answers": {"a": "old", "b": "keep", "switch": false}, "fields": [{"key": "b", "kind": "text", "showIf": "not a"}, {"key": "a", "kind": "text", "showIf": "switch"}, {"key": "switch", "kind": "checkbox"}], "name": "negation listed before what it reads", "visible": ["b", "switch"]},
+    {"answers": {"kind": "Cold work", "permit": "P-1", "watch": "Ali"}, "fields": [{"key": "kind", "kind": "select", "options": ["Hot work", "Cold work"]}, {"key": "permit", "kind": "text", "showIf": "kind == 'Hot work'"}, {"key": "watch", "kind": "text", "showIf": "permit"}], "name": "a comparison chain", "visible": ["kind"]},
+    {"answers": {"a": "x", "b": "y"}, "fields": [{"key": "a", "kind": "text", "showIf": "b"}, {"key": "b", "kind": "text", "showIf": "a"}], "name": "a cycle of answered fields", "visible": ["a", "b"]},
+    {"answers": {"a": "x", "b": ""}, "fields": [{"key": "a", "kind": "text", "showIf": "b"}, {"key": "b", "kind": "text", "showIf": "a"}], "name": "a cycle with one blank field", "visible": []},
+    {"answers": {"a": "x"}, "fields": [{"key": "a", "kind": "text", "showIf": "not a"}], "name": "a field that hides itself (bounded passes)", "visible": ["a"]},
+    {"answers": {"a": "x"}, "fields": [{"key": "s", "kind": "section"}, {"key": "a", "kind": "text", "showIf": "not a"}], "name": "a field that hides itself, with a section", "visible": []},
+    {"answers": {"a": "x", "c": "z", "gate": false}, "fields": [{"key": "gate", "kind": "checkbox"}, {"key": "a", "kind": "text", "showIf": "gate"}, {"key": "c", "kind": "text"}, {"key": "b", "kind": "text", "showIf": "a or c"}], "name": "an or of a hidden and a visible field", "visible": ["gate", "c", "b"]}
+  ]
+}

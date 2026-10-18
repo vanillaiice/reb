@@ -23,8 +23,10 @@ import (
 // A name is a column of the row, read like JavaScript's parseFloat (0 when not a number); any other
 // name is 0. Dividing by zero gives 0, and so does an expression that does not parse. The result is
 // formatted like JavaScript's Number#toFixed. Rebar's web form and mobile app evaluate formulas the
-// same way: every evaluator runs testdata/formula_cases.json.
+// same way: every evaluator runs testdata/formula_cases.json. The precision is held to
+// 0..MaxPrecision.
 func Formula(expression string, row map[string]any, precision int) string {
+	precision = min(max(precision, 0), MaxPrecision)
 	result := 0.0
 	if tokens, ok := formulaTokens(expression); ok {
 		f := &formulaParser{tokens: tokens, row: row}

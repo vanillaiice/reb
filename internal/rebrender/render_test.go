@@ -1,7 +1,9 @@
 package rebrender
 
 import (
+	"errors"
 	"html/template"
+	"strings"
 	"testing"
 )
 
@@ -30,6 +32,8 @@ func TestFormatNumberBothArgumentOrders(t *testing.T) {
 		`{{formatNumber 2 .val}}`:                       "3.14",
 		`{{sumColumn .rows "amount" | formatNumber 2}}`: "3.50",
 		`{{multiply .val 2 | formatNumber 0}}`:          "6",
+		`{{formatNumber 123 2}}`:                        "123.00", // two integers: value first
+		`{{formatNumber (len .rows) 1}}`:                "2.0",
 	}
 	for src, want := range cases {
 		if got := render(t, src, data); got != want {
@@ -52,6 +56,9 @@ func TestFormatMoney(t *testing.T) {
 		`{{sumColumn .rows "amount" | formatMoney "QAR" 2}}`: "QAR 1,250.50",
 		`{{formatMoney .missing "EUR" 2}}`:                   "EUR 0.00",
 		`{{formatMoney .val "" 1}}`:                          "1,234,567.9",
+		`{{formatMoney 123 "QAR" 2}}`:                        "QAR 123.00",
+		`{{formatMoney (len .rows) "QAR" 0}}`:                "QAR 2",
+		`{{len .rows | formatMoney "QAR" 2}}`:                "QAR 2.00",
 	}
 	for src, want := range cases {
 		if got := render(t, src, data); got != want {
@@ -67,5 +74,17 @@ func TestSafeHTMLSanitizesAnswerText(t *testing.T) {
 	})
 	if want := `<p>hi</p>|<p style="color:red">engine HTML</p>`; got != want {
 		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestRenderStopsAtTheOutputLimit(t *testing.T) {
+	if _, err := compileHTML(`{{range 1000}}`+strings.Repeat("x", 100)+`{{end}}`, nil, 10_000); !errors.Is(err, ErrOutputTooLarge) {
+		t.Errorf("err = %v, want ErrOutputTooLarge", err)
+	}
+	if _, err := compileHTML(`{{range 1000}}{{range 1000}}{{range 1000}}x{{end}}{{end}}{{end}}`, nil, 1<<20); !errors.Is(err, ErrOutputTooLarge) {
+		t.Errorf("nested: err = %v, want ErrOutputTooLarge", err)
+	}
+	if out, err := compileHTML(`{{range 99}}x{{end}}`, nil, 100); err != nil || len(out) != 99 {
+		t.Errorf("under the limit: %d bytes, %v", len(out), err)
 	}
 }

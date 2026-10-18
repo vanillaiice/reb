@@ -79,9 +79,31 @@ func TestParseColumnsAsTheMobileAppDoes(t *testing.T) {
 }
 
 func TestColumnsDeclaredInsideATableAreAnsweredPerRow(t *testing.T) {
-	keys, _ := keysAndKinds(Normalize(raw(t, `[{"key":"rows","type":"table","options":["qty:number"]},{"key":"qty","type":"number"},{"key":"note","type":"text"}]`)))
+	keys, _ := keysAndKinds(Normalize(raw(t, `[{"key":"rows","type":"table","options":["qty:number"]},{"key":"qty","type":"number","table":"rows"},{"key":"note","type":"text"}]`)))
 	if !reflect.DeepEqual(keys, []string{"rows", "note"}) {
 		t.Errorf("keys = %v", keys)
+	}
+}
+
+func TestATopLevelFieldNamedLikeAColumnStays(t *testing.T) {
+	compiled, err := Compile(`<reb-number name="qty" label="Quantity" /><reb-table name="rows" label="Rows" options="qty:number">` +
+		`<reb-declare name="qty" type="number" /><table><tr reb-row><td>{{.qty}} of {{$.qty}}</td></tr></table></reb-table>`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keys, _ := keysAndKinds(compiled.Fields)
+	if !reflect.DeepEqual(keys, []string{"qty", "rows"}) {
+		t.Errorf("keys = %v", keys)
+	}
+	if len(compiled.Schema) != 3 || compiled.Schema[2].Table != "rows" || compiled.Schema[0].Table != "" {
+		t.Errorf("raw schema = %+v", compiled.Schema)
+	}
+	var codes []string
+	for _, w := range compiled.Warnings {
+		codes = append(codes, w.Code)
+	}
+	if !reflect.DeepEqual(codes, []string{"column_shadows_field"}) {
+		t.Errorf("warnings = %v", codes)
 	}
 }
 
@@ -182,6 +204,29 @@ func TestPrepareAppliesRequiredBoundsPatternAndShowIf(t *testing.T) {
 	prepared = Prepare(schema, map[string]any{"kind": "Hot work", "agree": true})
 	if got := errorCodes(prepared.Errors); !reflect.DeepEqual(got, []string{"permit:blank"}) {
 		t.Errorf("a visible required field must be answered: %v", got)
+	}
+}
+
+func TestPrepareDropsTheErrorsOfHiddenFields(t *testing.T) {
+	schema := schemaFrom(t, `
+		<reb-checkbox name="gate" label="Gate"></reb-checkbox>
+		<reb-number name="n" label="N" show-if="gate"></reb-number>
+		<reb-table name="items" label="Items" options="qty:number" show-if="gate"></reb-table>
+		<reb-number name="crew" label="Crew"></reb-number>`)
+	many := make([]any, MaxRows+1)
+	for i := range many {
+		many[i] = map[string]any{"qty": "1"}
+	}
+
+	for name, items := range map[string]any{"bad cell": []any{map[string]any{"qty": "lots"}}, "too many rows": many} {
+		prepared := Prepare(schema, map[string]any{"gate": false, "n": "bad", "items": items, "crew": "x"})
+		if got := errorCodes(prepared.Errors); !reflect.DeepEqual(got, []string{"crew:not_a_number"}) {
+			t.Errorf("%s: errors = %v, want only the visible field's", name, got)
+		}
+		prepared = Prepare(schema, map[string]any{"gate": true, "n": "bad", "items": items, "crew": "x"})
+		if got := errorCodes(prepared.Errors); len(got) != 3 || got[0] != "n:not_a_number" || got[2] != "crew:not_a_number" {
+			t.Errorf("%s: shown, errors = %v", name, got)
+		}
 	}
 }
 
@@ -403,5 +448,34 @@ func TestFillableFields(t *testing.T) {
 		if !strings.Contains(html, want) || strings.Contains(html, "Fill in the boxes") != fillable {
 			t.Errorf("fillable %v rendered:\n%s", fillable, html)
 		}
+	}
+}
+
+func TestSchemaInputValidatesAGivenSchema(t *testing.T) {
+	refused := map[string]string{
+		"version":   `{"schemaVersion":3,"fields":[]}`,
+		"kind":      `{"schemaVersion":2,"fields":[{"key":"a","kind":"rocket"}]}`,
+		"no key":    `{"schemaVersion":2,"fields":[{"key":" ","kind":"text"}]}`,
+		"column":    `{"schemaVersion":2,"fields":[{"key":"t","kind":"table","columns":[{"key":"c","kind":"rocket"}]}]}`,
+		"precision": `{"schemaVersion":2,"fields":[{"key":"t","kind":"table","columns":[{"key":"v","kind":"formula","expression":"1","precision":10000}]}]}`,
+	}
+	for name, text := range refused {
+		var in SchemaInput
+		if err := json.Unmarshal([]byte(`{"fields":`+text+`}`), &in); err != nil {
+			t.Fatal(err)
+		}
+		_, err := in.Resolve()
+		var coded *Error
+		if !errors.As(err, &coded) || coded.Code != "invalid_schema" {
+			t.Errorf("%s: err = %v, want invalid_schema", name, err)
+		}
+	}
+	var in SchemaInput
+	json.Unmarshal([]byte(`{"fields":{"schemaVersion":2,"fields":[{"key":"t","kind":"table","columns":[{"key":"v","kind":"formula","expression":"1","precision":10}]}]}}`), &in)
+	if schema, err := in.Resolve(); err != nil || schema == nil {
+		t.Errorf("a valid schema: %v, %v", schema, err)
+	}
+	if schema, err := (SchemaInput{}).Resolve(); schema != nil || err != nil {
+		t.Errorf("no schema: %v, %v", schema, err)
 	}
 }

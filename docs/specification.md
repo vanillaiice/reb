@@ -94,12 +94,17 @@ operand    := field_name | 'text' | "text" | number | "(" expression ")"
   checkbox, a non-empty list, a number other than 0.
 * `==` and `!=` compare the answers as trimmed text: a checkbox reads `true` or `false`, a
   missing answer reads as empty.
-* Conditions are evaluated repeatedly, so a field shown only by a hidden field is hidden as well.
+* Conditions are evaluated repeatedly, so a field shown only by a hidden field is hidden as well,
+  and reads as unanswered: `not a` holds when `a` is hidden. Every field starts visible; each pass
+  evaluates every condition against the answers of the fields visible when the pass starts and sets
+  each field shown or hidden. Passes stop when nothing changes, or after one more pass than the form
+  has fields (sections included), so a cycle that never settles (`a` shown if `not a`) still ends.
 * Examples: `show-if="work_type == 'Hot work'"`, `show-if="permit and not isolated"`,
   `show-if="(shift == 'Night' or crew != 0) and lighting"`.
 
 A condition that does not parse is a compile error; a condition naming a field the template does not
-declare is a warning. The cases in `testdata/show_if_cases.json` define the behaviour.
+declare is a warning. The cases in `testdata/show_if_cases.json` define the behaviour of one
+condition, those in `testdata/visibility_cases.json` that of a whole form.
 
 ---
 
@@ -221,8 +226,8 @@ The PDF compiler registers custom Go template functions for complex layout formu
 - `{{subtract .a .b}}`
 - `{{divide .numerator .denominator}}`
 - `{{sumColumn .my_table "amount"}}`: Extracts all rows from a table array, plucks the target key, and calculates the total sum.
-- `{{formatNumber .val 2}}`: Forces floating point numbers to render with the specified number of decimal places.
-- `{{formatMoney .val "QAR" 2}}`: A number with thousands separators, the given decimals and the currency code (also `{{sumColumn .rows "total" | formatMoney "QAR" 2}}`).
+- `{{formatNumber .val 2}}`: Forces floating point numbers to render with the specified number of decimal places (0 to 20). In a pipeline the decimals come first: `{{sumColumn .rows "total" | formatNumber 2}}`. That form is recognized by an integer first argument and a non-integer value, so an integer value (a literal, or a function such as `len`) is written value first: `{{formatNumber (len .rows) 0}}` prints the row count, `{{formatNumber 123 2}}` prints `123.00`.
+- `{{formatMoney .val "QAR" 2}}`: A number with thousands separators, the given decimals and the currency code (also `{{sumColumn .rows "total" | formatMoney "QAR" 2}}`). An integer amount works in both forms: `{{formatMoney 123 "QAR" 2}}` prints `QAR 123.00`.
 - `{{formatDate "02/01/2006" .day}}`: A date answer in Go's layout notation; `{{now | formatDate "02/01/2006"}}` prints today.
 - `{{safeHTML .value}}`: Prints a value as HTML (empty when missing). Answer text is sanitized first (bluemonday's UGC policy: formatting and links stay, scripts, styles and event handlers go); a text area's paragraphs print as they are.
 
@@ -394,18 +399,26 @@ loaded only when needed. PDFs travel base64-encoded in the JSON.
 
 ### 8.1 Schemas
 `compile` returns two schemas. `schema` is the raw list the tags declared (`key`, `type`, `label`,
-`options`, the v1.1 attributes and `fillable`; schemaVersion 1, read by older clients). `fields` is the normalized
+`options`, the v1.1 attributes and `fillable`; schemaVersion 1, read by older clients); a tag inside a
+`<reb-table>` named after one of its columns declares that column and carries `table` (the table's
+name). `fields` is the normalized
 schema, `{"schemaVersion": 2, "fields": [...]}`: each field has a `kind` (`section`, `text`,
 `number`, `date`, `textarea`, `select`, `checkbox`, `images`, `signature`, `table`; aliases such as
 `radio`, `string` and `photogrid` mapped, the declared `type` kept), a `maxLength` for text,
 `fillable` when the field can be typed into the PDF (section 4.5), and
 tables have parsed `columns` (`key`, `kind`, `label`, `options`, `expression`, `precision`) with the
-columns declared inside them folded in. Consumers read `fields` and never parse options themselves.
+columns declared inside them folded in. A top-level field may share a name with a column; both are
+kept. Consumers read `fields` and never parse options themselves.
+
+A schema passed in as `fields` is checked before use: `schemaVersion` 2, known field and column kinds,
+precision 0 to 10, and at most 2,000 fields, 200 columns per table, 1,000 options per field or column
+and 1,000 characters per formula. One that fails is refused with `invalid_schema` (`detail`).
 
 ### 8.2 Errors and warnings
 A template that cannot be used fails with `{"error", "code", "params"}`: `invalid_field_name`
 (`name`, `tag`), `invalid_show_if` (`field`, `detail`), `invalid_pattern` (`field`), `syntax`
-(`detail`: Go template syntax that could never render), `invalid` (`detail`). Warnings come back with
+(`detail`: Go template syntax that could never render), `invalid_schema` (`detail`: a schema passed
+in that 8.1 refuses), `invalid` (`detail`). Warnings come back with
 the compiled template:
 
 * `missing_label` (`field`): a field without a label.
@@ -418,6 +431,8 @@ the compiled template:
 * `duplicate_field` (`field`): one name declared as fields of different kinds; only the first
   declaration counts. Declaring the same field twice as the same kind is fine (it prints the answer
   twice).
+* `column_shadows_field` (`field`, `table`): a table column named like a top-level field. Inside the
+  table's rows `{{.name}}` is the column; `{{$.name}}` reaches the field.
 * `fillable_ignored` (`field`, `tag`): the `fillable` attribute on a tag that cannot be filled in a
   PDF (only text, number, date, text area and checkbox tags can).
 
@@ -426,7 +441,8 @@ computed and hidden fields dropped, plus a list of `{"key", "code", "params"}`: 
 `too_long` (`count`), `not_a_number`, `invalid_date`, `not_an_option`, `too_many_files` (`count`),
 `too_many_rows` (`count`), `blank`, `too_small` (`count`), `too_large` (`count`). An error in a table
 cell also carries `row` (from 0, in the returned rows) and `column` (the column's key). File answers are
-returned as sent: what a reference may point to is the consumer's rule.
+returned as sent: what a reference may point to is the consumer's rule. A hidden field's answer is
+dropped with any error its value had, so a field the form does not show never blocks it.
 
 ### 8.3 Versions
 `rebc version` and `__rebVersion()` give the engine version; `compile` returns it as

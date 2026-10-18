@@ -49,23 +49,32 @@ var numberPattern = regexp.MustCompile(`^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]
 //     come back as YYYY-MM-DD); a select answer must be one of its options; checkboxes become true
 //     or false; table rows keep only their columns, with formula and row-number cells computed here
 //     whatever was sent;
-//   - fields whose show-if condition does not hold are dropped, and only visible fields are
-//     checked for required, min, max and pattern;
+//   - fields whose show-if condition does not hold are dropped with any error their value had, and
+//     only visible fields are checked for required, min, max and pattern;
 //   - file answers (photo grids, signatures, photo and signature cells) are kept as the trimmed
 //     references the caller sent: what a reference may point to is the caller's rule.
 func Prepare(schema Schema, input map[string]any) Prepared {
 	p := &preparer{errors: []FieldError{}}
 	answers := map[string]any{}
+	valueErrors := map[string][]FieldError{} // kept per field until visibility is known
 	for _, field := range schema.Fields {
 		if !field.Stored() {
 			continue
 		}
 		if value, ok := input[field.Key]; ok {
 			answers[field.Key] = p.value(field, value)
+			valueErrors[field.Key] = append(valueErrors[field.Key], p.errors...)
+			p.errors = p.errors[:0]
 		}
 	}
 
+	// A hidden field's answer is dropped, and so are its errors: an invisible field cannot block.
 	visible := visibility(schema, answers)
+	for _, field := range schema.Fields {
+		if field.Stored() && visible[field.Key] {
+			p.errors = append(p.errors, valueErrors[field.Key]...)
+		}
+	}
 	for _, field := range schema.Fields {
 		if !field.Stored() {
 			continue

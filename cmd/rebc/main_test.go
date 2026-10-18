@@ -171,3 +171,24 @@ func TestFillableAndPDFAnswers(t *testing.T) {
 		t.Error("pdf-answers without a schema succeeded")
 	}
 }
+
+func TestRenderRefusesAnOversizedDocument(t *testing.T) {
+	_, err := run("render", []byte(`{"html": "{{range 1000000}}`+strings.Repeat("x", 100)+`{{end}}", "answers": {}}`))
+	if out := string(errorJSON(err)); !strings.Contains(out, `"code":"output_too_large"`) {
+		t.Errorf("error = %s", out)
+	}
+}
+
+func TestPrepareRefusesAnInvalidSchema(t *testing.T) {
+	_, err := run("prepare", []byte(`{"fields": {"schemaVersion": 2, "fields": [{"key": "t", "kind": "table", "columns": [{"key": "v", "kind": "formula", "expression": "1", "precision": 10000}]}]}, "answers": {"t": [{}]}}`))
+	if out := string(errorJSON(err)); !strings.Contains(out, `"code":"invalid_schema"`) {
+		t.Errorf("error = %s", out)
+	}
+}
+
+func TestRenderOutputKeepsHTMLUnescaped(t *testing.T) {
+	out, err := run("render", []byte(`{"html": "<p>{{.a}}</p>", "answers": {"a": "x & y"}}`))
+	if err != nil || string(out) != `{"html":"<p>x &amp; y</p>"}` {
+		t.Errorf("out = %s, %v", out, err)
+	}
+}

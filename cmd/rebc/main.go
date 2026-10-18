@@ -23,23 +23,31 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"runtime/debug"
 
 	"github.com/vanillaiice/reb"
 	"github.com/vanillaiice/reb/internal/rebcompiler"
 	"github.com/vanillaiice/reb/internal/rebdoc"
 	"github.com/vanillaiice/reb/internal/rebpdf"
-	"github.com/vanillaiice/reb/internal/rebrender"
 )
 
 // maxInput bounds what rebc reads, so a runaway caller cannot exhaust memory.
 const maxInput = 32 << 20
 
+// memoryLimit is a soft limit (GOMEMLIMIT, unless the caller sets one): past it the collector works
+// harder rather than letting the heap grow. Renders are bounded by rebrender.MaxOutput.
+const memoryLimit = 1 << 30
+
 func main() {
+	if os.Getenv("GOMEMLIMIT") == "" {
+		debug.SetMemoryLimit(memoryLimit)
+	}
 	if len(os.Args) != 2 {
 		fail(errors.New("usage: rebc compile|prepare|render|normalize|fillable|pdf-answers|version < input.json"))
 	}
@@ -126,7 +134,10 @@ func prepare(input []byte) ([]byte, error) {
 	if err := decode(input, &in); err != nil {
 		return nil, err
 	}
-	schema := in.Resolve()
+	schema, err := in.Resolve()
+	if err != nil {
+		return nil, err
+	}
 	if schema == nil {
 		return nil, errors.New("prepare needs fields or schema")
 	}
@@ -145,11 +156,23 @@ func render(input []byte) ([]byte, error) {
 	if err := decode(input, &in); err != nil {
 		return nil, err
 	}
-	html, err := rebrender.CompileHTML(in.HTML, rebdoc.BuildContext(rebdoc.WithFillable(in.System, in.Fillable), in.Answers, in.Assets, in.Resolve()))
+	schema, err := in.Resolve()
 	if err != nil {
 		return nil, err
 	}
-	return json.Marshal(map[string]string{"html": html})
+	html, err := rebdoc.Render(in.HTML, rebdoc.BuildContext(rebdoc.WithFillable(in.System, in.Fillable), in.Answers, in.Assets, schema))
+	if err != nil {
+		return nil, err
+	}
+	// Without escaping <, > and & the output stays near the size of the HTML (at most twice it, for
+	// quotes), which is what a caller reading it can budget for.
+	var out bytes.Buffer
+	encoder := json.NewEncoder(&out)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(map[string]string{"html": html}); err != nil {
+		return nil, err
+	}
+	return bytes.TrimSuffix(out.Bytes(), []byte("\n")), nil
 }
 
 func normalize(input []byte) ([]byte, error) {
@@ -187,7 +210,10 @@ func pdfAnswers(input []byte) ([]byte, error) {
 	if err := decode(input, &in); err != nil {
 		return nil, err
 	}
-	schema := in.Resolve()
+	schema, err := in.Resolve()
+	if err != nil {
+		return nil, err
+	}
 	if schema == nil {
 		return nil, errors.New("pdf-answers needs fields or schema")
 	}

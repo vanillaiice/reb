@@ -54,3 +54,33 @@ func TestShowIfFields(t *testing.T) {
 		t.Errorf("Fields = %v, want %v", condition.Fields, want)
 	}
 }
+
+func TestVisibilityCases(t *testing.T) {
+	raw, err := os.ReadFile("../../testdata/visibility_cases.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var file struct {
+		Cases []struct {
+			Name    string         `json:"name"`
+			Fields  []Field        `json:"fields"`
+			Answers map[string]any `json:"answers"`
+			Visible []string       `json:"visible"`
+		} `json:"cases"`
+	}
+	if err := json.Unmarshal(raw, &file); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range file.Cases {
+		visible := visibility(Schema{Version: SchemaVersion, Fields: c.Fields}, c.Answers)
+		got := []string{}
+		for _, field := range c.Fields {
+			if field.Stored() && visible[field.Key] {
+				got = append(got, field.Key)
+			}
+		}
+		if !reflect.DeepEqual(got, c.Visible) {
+			t.Errorf("%s: visible = %v, want %v", c.Name, got, c.Visible)
+		}
+	}
+}

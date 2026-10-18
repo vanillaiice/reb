@@ -86,6 +86,10 @@ type RebFieldSchema struct {
 	Pattern     string `json:"pattern,omitempty"`
 	ShowIf      string `json:"showIf,omitempty"`
 	Fillable    bool   `json:"fillable,omitempty"` // pdf-forms:boxes
+
+	// Table is the <reb-table> whose column this entry declares (a tag inside it named after one of
+	// its columns); empty for a top-level field. rebdoc.Normalize folds these into their table.
+	Table string `json:"table,omitempty"`
 }
 
 // Error is a compile error a caller can translate: Code names the problem, Params fill the message.
@@ -140,8 +144,19 @@ func Compile(rawHTML string) ([]RebFieldSchema, string, error) {
 		return false
 	}
 
-	var walk func(*html.Node, string)
-	walk = func(n *html.Node, currentTable string) {
+	// columnKeys are the column names a <reb-table>'s options declare ("qty:number,total:formula[...]").
+	columnKeys := func(options string) map[string]bool {
+		keys := map[string]bool{}
+		for _, option := range strings.Split(options, ",") {
+			if key, _, _ := strings.Cut(option, ":"); strings.TrimSpace(key) != "" {
+				keys[strings.TrimSpace(key)] = true
+			}
+		}
+		return keys
+	}
+
+	var walk func(*html.Node, string, map[string]bool)
+	walk = func(n *html.Node, currentTable string, tableColumns map[string]bool) {
 		// Check for reb-row attribute (avoids HTML5 parser hoisting invalid tags out of tables)
 		if n.Type == html.ElementNode {
 			hasRebRow := false
@@ -209,6 +224,9 @@ func Compile(rawHTML string) ([]RebFieldSchema, string, error) {
 					ShowIf:      strings.TrimSpace(getAttr(n, "show-if")),
 					Fillable:    hasFlag(n, "fillable") && fillableTypes[rebType], // pdf-forms:boxes
 				}
+				if rebType != "table" && tableColumns[name] {
+					field.Table = currentTable
+				}
 
 				if opts := getAttr(n, "options"); opts != "" {
 					// options="High, Medium, Low" must yield "Medium", not " Medium".
@@ -219,10 +237,11 @@ func Compile(rawHTML string) ([]RebFieldSchema, string, error) {
 					}
 				}
 
-				// Deduplicate: only append if a field with this Key doesn't already exist
+				// Deduplicate: only append if a field with this Key doesn't already exist in the same
+				// scope (a top-level field and a table's column may share a name)
 				exists := false
 				for _, existingField := range schema {
-					if existingField.Key == name {
+					if existingField.Key == name && existingField.Table == field.Table {
 						exists = true
 						break
 					}
@@ -281,6 +300,7 @@ func Compile(rawHTML string) ([]RebFieldSchema, string, error) {
 			if rebType == "table" {
 				// We turn the <reb-table> container into a div and keep all children
 				// (the manual table layout) intact so the user can structure it themselves.
+				tableColumns = columnKeys(getAttr(n, "options"))
 				n.Type = html.ElementNode
 				n.Data = "div"
 
@@ -389,11 +409,11 @@ func Compile(rawHTML string) ([]RebFieldSchema, string, error) {
 
 	WalkChildren:
 		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			walk(c, currentTable)
+			walk(c, currentTable, tableColumns)
 		}
 	}
 
-	walk(node, "")
+	walk(node, "", nil)
 	if walkErr != nil {
 		return nil, "", walkErr
 	}

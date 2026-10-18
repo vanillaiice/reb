@@ -26,7 +26,7 @@ internal/rebdoc/       what consumers need around it: Compile (normalized schema
                        Prepare (answer validation, formulas, required/min/max/pattern, show-if),
                        BuildContext (system values, file names, text-area paragraphs), sample answers
 assets/                tailwindcss.js (the Tailwind browser build <reb-tailwind> loads) and paged.polyfill.js
-testdata/              cases every consumer can run: formula_cases.json, show_if_cases.json, and golden/
+testdata/              cases every consumer can run: formula_cases.json, show_if_cases.json, visibility_cases.json, and golden/
                        (templates with their expected schema, compiled template and rendered document)
 docs/                  the .reb specification
 ```
@@ -80,10 +80,11 @@ would make the main build about 55% larger.
 
 ## Build and test
 
-Requires Go (see `go.mod`).
+Requires Go (see `go.mod`; its `toolchain` line is the release every artifact is built with).
 
 ```bash
 go vet ./... && go test ./...
+go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...   # as CI does
 
 # after a change to what templates compile or render to: rewrite testdata/golden, review the diff
 go test ./cmd/rebc -update

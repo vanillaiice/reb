@@ -57,3 +57,12 @@ func TestFormulaEdges(t *testing.T) {
 		}
 	}
 }
+
+func TestFormulaHoldsPrecisionToItsBound(t *testing.T) {
+	if got := Formula("1", nil, 10_000); got != "1.0000000000" {
+		t.Errorf("precision 10000 = %q", got)
+	}
+	if got := Formula("1.5", nil, -3); got != "2" {
+		t.Errorf("precision -3 = %q", got)
+	}
+}

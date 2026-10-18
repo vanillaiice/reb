@@ -5,6 +5,47 @@ warning codes, the `.reb` language, and what templates compile and render to. Th
 [specification section 8.4](docs/specification.md#84-compatibility); `testdata/golden` shows each
 change to the output.
 
+## v0.8.0
+
+### Fixed
+
+- **A top-level field named like a table column is no longer dropped.** `Normalize` used to remove
+  every non-table field whose name any table's options used as a column, so `<reb-number name="qty">`
+  next to `<reb-table options="qty:number">` lost the field: the form never asked for it and
+  `prepare` discarded its answer. Only a tag inside a `<reb-table>` named after one of its columns
+  now declares the column; the raw schema marks it with `table` (the table's name), and both
+  declarations are kept, so the raw schema can list one name twice (once with `table`). A raw
+  schema from an earlier release has no marks, so `normalize` keeps all its entries at the top
+  level; recompile such templates.
+- `prepare` drops the errors of hidden fields with their answers: a hidden number holding `"bad"`,
+  a hidden table with a bad cell or too many rows no longer blocks the form.
+- `{{formatNumber 123 2}}` prints `123.00`: with two integer arguments the value comes first, as
+  documented (it used to print `2.00000000000000000000`). An integer pipeline is written
+  `{{formatNumber (len .rows) 0}}`. `formatMoney` no longer depends on that rule: `{{formatMoney 123
+  "QAR" 2}}` prints `QAR 123.00`.
+- A formula's precision is held to 0..10 wherever it comes from (a normalized schema passed in used
+  to reach the formatter unchecked).
+
+### Added
+
+- `invalid_schema` (`detail`): a schema passed in as `fields` (or raw `schema`) is checked before
+  `prepare`, `render` or `pdf-answers` use it: `schemaVersion` 2, known field and column kinds,
+  precision 0..10, and size budgets (specification section 8.1). In rebc and the WebAssembly build
+  alike.
+- `output_too_large` (`count`): a render that would print more than 64 MiB stops with this error
+  instead of growing without bound (`{{range 100000000}}`).
+- The warning `column_shadows_field` (`field`, `table`): a table column named like a top-level field.
+- `testdata/visibility_cases.json`: whole-form show-if visibility (chains, negation, cycles), for
+  every evaluator to run; specification section 3.3 now spells out the passes.
+
+### Changed
+
+- `rebc render` prints its HTML without escaping `<`, `>` and `&` in the JSON (the same JSON value).
+- rebc sets a soft 1 GiB memory limit unless `GOMEMLIMIT` is set.
+- Built with Go 1.27.2 (`toolchain` in go.mod), which fixes two `html/template` escaping advisories
+  (GO-2026-6599, GO-2026-6600); `golang.org/x/net` v0.61.0. CI runs govulncheck.
+- `duplicate_field` no longer counts a table's column declaration against a top-level field.
+
 ## v0.7.0
 
 ### Added

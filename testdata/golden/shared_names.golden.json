@@ -1,0 +1,128 @@
+{
+  "compile": {
+    "engineVersion": "(the engine version)",
+    "fields": {
+      "fields": [
+        {
+          "key": "qty",
+          "kind": "number",
+          "label": "Total quantity",
+          "type": "number"
+        },
+        {
+          "key": "site",
+          "kind": "text",
+          "label": "Site",
+          "maxLength": 10000,
+          "type": "text"
+        },
+        {
+          "columns": [
+            {
+              "key": "item",
+              "kind": "text",
+              "label": "Item"
+            },
+            {
+              "key": "qty",
+              "kind": "number",
+              "label": "Qty"
+            }
+          ],
+          "key": "materials",
+          "kind": "table",
+          "label": "Materials",
+          "type": "table"
+        },
+        {
+          "columns": [
+            {
+              "key": "item",
+              "kind": "text",
+              "label": "Item"
+            },
+            {
+              "key": "hours",
+              "kind": "number",
+              "label": "Hours"
+            }
+          ],
+          "key": "labour",
+          "kind": "table",
+          "label": "Labour",
+          "type": "table"
+        }
+      ],
+      "schemaVersion": 2
+    },
+    "schema": [
+      {
+        "key": "qty",
+        "label": "Total quantity",
+        "type": "number"
+      },
+      {
+        "key": "site",
+        "label": "Site",
+        "type": "text"
+      },
+      {
+        "key": "materials",
+        "label": "Materials",
+        "options": [
+          "item:text",
+          "qty:number"
+        ],
+        "type": "table"
+      },
+      {
+        "key": "qty",
+        "label": "",
+        "table": "materials",
+        "type": "number"
+      },
+      {
+        "key": "labour",
+        "label": "Labour",
+        "options": [
+          "item:text",
+          "hours:number"
+        ],
+        "type": "table"
+      }
+    ],
+    "warnings": [
+      {
+        "code": "column_shadows_field",
+        "message": "the table materials has a column named like the field qty; inside its rows {{.qty}} is the column and {{$.qty}} the field",
+        "params": {
+          "field": "qty",
+          "table": "materials"
+        }
+      }
+    ]
+  },
+  "prepare": {
+    "answers": {
+      "labour": [
+        {
+          "hours": "3",
+          "item": "Fixing"
+        }
+      ],
+      "materials": [
+        {
+          "item": "Rebar",
+          "qty": "7"
+        },
+        {
+          "item": "Mesh",
+          "qty": "5"
+        }
+      ],
+      "qty": "12",
+      "site": "North yard"
+    },
+    "errors": []
+  }
+}

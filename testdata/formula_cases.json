@@ -126,13 +126,13 @@
   "expected": "-0.20"
  },
  {
-  "expression": "a+b",
+  "expression": "(a+b)*10000000",
   "row": {
    "a": "0.1",
    "b": "0.2"
   },
-  "precision": 17,
-  "expected": "0.30000000000000004"
+  "precision": 10,
+  "expected": "3000000.0000000005"
  },
  {
   "expression": "2*-3",
